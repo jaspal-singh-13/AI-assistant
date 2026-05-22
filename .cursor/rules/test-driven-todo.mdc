@@ -1,0 +1,101 @@
+---
+description: Write tests for every implemented function and only mark TODO tasks complete after tests pass
+alwaysApply: true
+---
+
+# Test-Driven TODO Completion
+
+A TODO task is NOT complete until its tests pass. `[x]` in `TODO.md` means **tested and green**, not just implemented.
+
+## Rule: implement → test → verify → mark done
+
+Every time you implement a function that was previously `raise NotImplementedError` or a stub:
+
+1. **Implement** the function.
+2. **Write or unskip the corresponding test** in `tests/`.
+3. **Run the test** with `pytest tests/<file>.py::<TestClass>::<test_method> -v`.
+4. **Only mark `[x]` in TODO.md** after the test output shows `PASSED`.
+
+If a test fails, fix the implementation — do not mark the task done.
+
+## Test file mapping
+
+| Source module | Test file |
+|---|---|
+| `memory/manager.py`, `memory/summariser.py`, `memory/converters.py` | `tests/test_memory.py` |
+| `tools/*.py` | `tests/test_tools.py` |
+| `guardrails/*.py` | `tests/test_guardrails.py` |
+| `evaluation/llm_judge.py` | `tests/test_judge.py` |
+| `agent/factory.py`, `agent/models.py` | `tests/test_agent.py` (create if missing) |
+| `observability/logger.py`, `observability/pricing.py` | `tests/test_observability.py` (create if missing) |
+| `evaluation/framework.py`, `evaluation/deepeval_metrics.py` | `tests/test_evaluation.py` (create if missing) |
+
+## Test requirements per function
+
+When implementing any function, the test must cover:
+
+- **Happy path** — correct inputs produce correct outputs.
+- **Edge cases** — empty input, zero values, missing optional fields.
+- **Error cases** — invalid inputs raise the expected exception or return the expected fallback.
+
+For functions that call external APIs (LlamaGuard, wttr.in, DuckDuckGo, Langfuse):
+- **Always mock the external call** using `unittest.mock.patch` or `pytest-mock`.
+- Never make real network calls in unit tests.
+
+## Unskipping existing stubs
+
+The test files already contain `pytest.skip("Phase N")` stubs. When implementing a function:
+
+1. Find the matching stub in the test file.
+2. Remove the `pytest.skip(...)` line.
+3. Fill in the test body.
+4. Run it to confirm green.
+
+## Example workflow
+
+Implementing `memory/manager.py → create_thread()`:
+
+```python
+# 1. Implement create_thread() in memory/manager.py
+
+# 2. In tests/test_memory.py, unskip and implement:
+def test_create_thread_auto_title(self, tmp_path):
+    # patch THREADS_DIR to tmp_path so no real files are written
+    with patch("memory.manager.THREADS_DIR", tmp_path):
+        with patch("memory.manager.INDEX_PATH", tmp_path / "index.json"):
+            thread = create_thread("Hello world how are you doing today")
+            assert thread["title"] == "Hello world how are you doing"
+
+# 3. Run:
+#    pytest tests/test_memory.py::TestThreadCRUD::test_create_thread_auto_title -v
+#    → PASSED
+
+# 4. Only now mark in TODO.md:
+#    - [x] `memory/manager.py` — implement `create_thread()` with JSON persistence
+```
+
+## Running tests
+
+```bash
+# Single test
+pytest tests/test_memory.py::TestThreadCRUD::test_create_thread_auto_title -v
+
+# Full file
+pytest tests/test_memory.py -v
+
+# All tests
+make test
+```
+
+## What counts as "tests pass"
+
+- The pytest output shows `PASSED` (not `SKIPPED`, not `ERROR`, not `FAILED`).
+- No new `FAILED` or `ERROR` in the full `make test` run.
+- `SKIPPED` is acceptable only for tests in future phases (e.g. Phase 3 tests while working on Phase 1).
+
+## Checklist before marking any TODO `[x]`
+
+- [ ] Function no longer contains `raise NotImplementedError`
+- [ ] Matching test exists in `tests/` (unskipped or newly written)
+- [ ] `pytest <test_path> -v` shows `PASSED`
+- [ ] No regressions: `make test` does not introduce new `FAILED` or `ERROR`

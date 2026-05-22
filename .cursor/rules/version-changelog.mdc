@@ -1,0 +1,69 @@
+---
+description: Bump version in pyproject.toml and update CHANGELOG.md on every meaningful change
+alwaysApply: true
+---
+
+# Version & Changelog
+
+Every meaningful code change must be reflected in `CHANGELOG.md` and `pyproject.toml`.
+
+## Versioning rules (Semantic Versioning)
+
+| Change type | Version bump | Example |
+|---|---|---|
+| Bug fix, minor correction | PATCH `0.x.Y` | `0.1.0` → `0.1.1` |
+| New feature, new module implemented | MINOR `0.X.0` | `0.1.0` → `0.2.0` |
+| Breaking interface change | MAJOR `X.0.0` | `0.1.0` → `1.0.0` |
+
+During early development (0.x.x), MINOR bumps are used for each completed phase.
+
+## When to bump
+
+Bump the version and add a CHANGELOG entry when you:
+- Complete implementation of a function that was previously `raise NotImplementedError`
+- Add a new module, class, or public function
+- Fix a bug in existing logic
+- Change a public interface (function signature, data schema, env var name)
+
+Do NOT bump for:
+- Updating comments or docstrings only
+- Reformatting code
+- Adding or updating test stubs that are still skipped
+
+## CHANGELOG format
+
+Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/):
+
+```markdown
+## [0.2.0] — YYYY-MM-DD
+
+### Added
+- Short description of what was added
+
+### Changed
+- Short description of what changed
+
+### Fixed
+- Short description of what was fixed
+
+### Removed
+- Short description of what was removed
+```
+
+Add new entries under `## [Unreleased]` as you work. When a version is ready to tag, move the `[Unreleased]` entries into a new versioned section and reset `[Unreleased]` to empty.
+
+## pyproject.toml sync
+
+When bumping, update the `version` field in `pyproject.toml`:
+
+```toml
+[project]
+version = "0.2.0"  # ← must match the new CHANGELOG section
+```
+
+## Checklist before finishing any response that changes code
+
+1. Does this change warrant a version bump?
+   → If yes: update `version` in `pyproject.toml`.
+2. Add a bullet under `## [Unreleased]` in `CHANGELOG.md` describing what changed.
+3. Use past tense in CHANGELOG entries: "Added X", "Fixed Y", "Implemented Z".

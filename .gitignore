@@ -9,9 +9,31 @@ wheels/
 # Virtual environments
 .venv
 
+# Environment — never commit real keys
 .env
 
+# Runtime data — generated at run time, not source
+logs/calls.jsonl
+memory/threads/*.json
+memory/index.json
 
+# Evaluation results — generated artifacts, re-created by `make eval`
+# These are NOT committed — they're reproducible from the prompt sets and models.
+evaluation/results/summary.csv
+evaluation/results/comparative.csv
+evaluation/results/benchmark_scores.csv
+evaluation/results/bar_chart.png
+evaluation/results/radar_chart.png
+evaluation/results/report.html
+
+# model_scores.json IS committed — it is the persistent scorecard for both models.
+# It is the deliverable; do NOT add it here.
+# evaluation/results/model_scores.json  ← intentionally tracked
+
+# Benchmark sample cache — commit these for offline eval (FR §15.3)
+# evaluation/benchmarks/samples/*.json  ← intentionally tracked
+
+# Project planning docs (not part of the submission)
 ask.md
 PRD.md
 to-be-done.md

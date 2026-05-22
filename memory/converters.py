@@ -1,0 +1,58 @@
+"""Converters between thread JSON message dicts and LangChain message objects.
+
+Used by memory.manager.get_llm_context() to build the LLM input list.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from langchain_core.messages import BaseMessage
+
+
+def dicts_to_messages(messages: list[dict]) -> list["BaseMessage"]:
+    """
+    Convert thread JSON message dicts → LangChain message objects.
+
+    Mapping:
+      role "user"      → HumanMessage(content=...)
+      role "assistant" → AIMessage(content=...)
+      role "tool"      → ToolMessage(content=..., tool_call_id=...)
+
+    TODO (Phase 1): implement.
+    """
+    # from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+    # result = []
+    # for m in messages:
+    #     role = m["role"]
+    #     content = m.get("content", "")
+    #     if role == "user":
+    #         result.append(HumanMessage(content=content))
+    #     elif role == "assistant":
+    #         result.append(AIMessage(content=content))
+    #     elif role == "tool":
+    #         result.append(ToolMessage(content=content, tool_call_id=m.get("tool_call_id", "")))
+    # return result
+    raise NotImplementedError("Phase 1 — dicts_to_messages")
+
+
+def message_to_dict(message: "BaseMessage", **extra) -> dict:
+    """
+    Convert a LangChain BaseMessage → a thread JSON message dict.
+
+    Always includes: role, content, timestamp (ISO UTC).
+    *extra* kwargs are merged in (e.g. metadata, state_snapshot, token_count).
+
+    TODO (Phase 1): implement.
+    """
+    # from datetime import datetime, timezone
+    # from langchain_core.messages import HumanMessage, AIMessage
+    # role = "user" if isinstance(message, HumanMessage) else "assistant"
+    # return {
+    #     "role": role,
+    #     "content": message.content,
+    #     "timestamp": datetime.now(timezone.utc).isoformat(),
+    #     **extra,
+    # }
+    raise NotImplementedError("Phase 1 — message_to_dict")

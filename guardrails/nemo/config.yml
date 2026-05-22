@@ -1,0 +1,18 @@
+# NeMo Guardrails configuration
+# FR-GRD-04: Conversation-level declarative constraints
+
+models:
+  - type: main
+    engine: openai
+    model: gpt-3.5-turbo
+
+rails:
+  input:
+    flows:
+      - check jailbreak
+      - check identity claim
+  output:
+    flows:
+      - check illegal activity
+      - check professional advice
+      - check off topic

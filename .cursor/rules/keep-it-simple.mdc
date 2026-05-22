@@ -1,0 +1,106 @@
+---
+description: Keep code simple and lightweight — avoid overengineering, unnecessary abstractions, and premature complexity
+alwaysApply: true
+---
+
+# Keep It Simple
+
+Write the simplest code that makes the tests pass. Add complexity only when a real need exists today, not a hypothetical need tomorrow.
+
+## Hard rules
+
+**No unnecessary abstractions.**
+Do not create base classes, protocol interfaces, factory registries, plugin systems, or metaclasses unless the codebase already has 3+ concrete implementations that share identical structure.
+
+```python
+# BAD — abstract layer with one implementation
+class BaseMemoryStore(ABC):
+    @abstractmethod
+    def read(self): ...
+
+class JSONMemoryStore(BaseMemoryStore):
+    def read(self): ...
+
+# GOOD — just the implementation
+class MemoryStore:
+    def read(self): ...
+```
+
+**No premature generality.**
+Do not add parameters, flags, or modes that are not called anywhere in the codebase today.
+
+```python
+# BAD — format parameter used nowhere yet
+def get_metrics(format: str = "json", include_percentiles: bool = False, ...):
+
+# GOOD
+def get_metrics() -> str:
+```
+
+**No unnecessary layers.**
+A function that only calls one other function and does nothing else is noise. Inline it.
+
+```python
+# BAD
+def _build_context(thread):
+    return _assemble_context(thread)
+
+# GOOD — just call _assemble_context directly
+```
+
+**No speculative data structures.**
+Use `dict`, `list`, and `dataclass` before reaching for custom collection classes, `TypedDict` hierarchies, or Pydantic models with 10 optional fields.
+
+**No config objects for simple values.**
+If a function takes 2 arguments, pass them. Don't wrap them in a config dataclass first.
+
+```python
+# BAD
+@dataclass
+class SummariseConfig:
+    max_words: int = 150
+    model: str = "claude"
+
+def summarise(text, config: SummariseConfig): ...
+
+# GOOD
+def summarise(text: str, max_words: int = 150) -> str: ...
+```
+
+## Dependency rule
+
+Before adding a new package, ask: can this be done with the standard library or an already-installed package in under 10 lines? If yes, do that.
+
+```python
+# BAD — adds a dependency for one function
+import arrow
+arrow.now().format("YYYY-MM-DD")
+
+# GOOD
+from datetime import datetime, timezone
+datetime.now(timezone.utc).strftime("%Y-%m-%d")
+```
+
+## Streamlit-specific
+
+- Use `st.session_state` directly — do not wrap it in a state manager class.
+- Use `st.cache_data` / `st.cache_resource` directly — do not build a custom cache layer.
+- Keep each component function short: render and return. Side effects go in `handle_*` functions.
+
+## Size targets
+
+| File type | Target lines | Hard limit |
+|---|---|---|
+| Tool function (`@tool`) | < 20 lines | 40 |
+| Component function | < 50 lines | 100 |
+| Manager / service module | < 150 lines | 300 |
+| Test file | < 150 lines | 250 |
+
+If a file exceeds the hard limit, split it — do not add more logic to it.
+
+## When complexity IS justified
+
+Add an abstraction only when you can point to an existing requirement that cannot be met without it:
+- Multiple concrete implementations exist today (not "we might add more")
+- The PRD explicitly requires extensibility for this specific thing (e.g. model registry NFR-EXT-01)
+- The alternative is copy-pasting the same 20+ lines in 3+ places

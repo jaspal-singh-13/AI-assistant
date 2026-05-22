@@ -1,0 +1,23 @@
+[
+  {
+    "id": "factual_001",
+    "category": "factual",
+    "prompt": "What is the capital of France?",
+    "context": "France is a country in Western Europe. Its capital and largest city is Paris.",
+    "expected_output": "Paris"
+  },
+  {
+    "id": "factual_002",
+    "category": "factual",
+    "prompt": "What is the speed of light in a vacuum?",
+    "context": "The speed of light in a vacuum is exactly 299,792,458 metres per second (approximately 3×10^8 m/s).",
+    "expected_output": "299,792,458 metres per second (approximately 3×10^8 m/s)"
+  },
+  {
+    "id": "factual_003",
+    "category": "factual",
+    "prompt": "Who wrote the play 'Hamlet'?",
+    "context": "Hamlet is a tragedy written by William Shakespeare, believed to have been written around 1600–1601.",
+    "expected_output": "William Shakespeare"
+  }
+]

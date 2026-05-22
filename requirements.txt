@@ -1,0 +1,39 @@
+# Agent core
+langchain>=0.3
+langchain-anthropic>=0.3
+langchain-huggingface>=0.1
+langgraph>=0.2
+
+# Observability
+langfuse>=2.0
+langsmith>=0.1
+
+# Evals
+deepeval>=1.4
+datasets>=2.0
+
+# Guardrails
+rebuff>=0.9
+presidio-analyzer>=2.2
+presidio-anonymizer>=2.2
+nemoguardrails>=0.9
+guardrails-ai>=0.5
+
+# Tools
+duckduckgo-search>=6.0
+requests>=2.31
+
+# UI
+streamlit>=1.35
+
+# Deploy
+gradio>=4.0
+
+# Utilities
+nest_asyncio>=1.6
+matplotlib>=3.8
+pandas>=2.0
+pytest>=8.0
+ruff>=0.4
+
+# promptfoo: npm install -g promptfoo  (not a pip package)

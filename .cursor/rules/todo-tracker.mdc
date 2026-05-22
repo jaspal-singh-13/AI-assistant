@@ -1,0 +1,56 @@
+---
+description: Keep TODO.md updated as the single source of truth for project task status
+alwaysApply: true
+---
+
+# TODO Tracker
+
+`TODO.md` is the single source of truth for all project tasks. Keep it in sync with code changes.
+
+## When to update TODO.md
+
+Update it whenever you:
+- Implement a function that was previously a stub → mark `[ ]` → `[x]`
+- Start working on a task → mark `[ ]` → `[~]`
+- Create a new file that adds capabilities → add a new task entry under the correct phase
+- Discover a missing task while implementing → add it under the relevant phase
+- Complete a whole phase's acceptance gate → add a note beneath the gate line
+
+## Task status markers
+
+```
+- [ ]  pending (not started)
+- [~]  in progress
+- [x]  done
+```
+
+## Checklist before finishing any response
+
+1. Did you implement or modify any file in `agent/`, `memory/`, `tools/`, `guardrails/`, `observability/`, `evaluation/`, `app/`, `tests/`?
+   → Find all matching tasks in `TODO.md` and update their status.
+
+2. Did you add a new file or new function not yet in `TODO.md`?
+   → Add it under the correct phase section.
+
+3. Did you stub something that needs future work?
+   → Ensure it has an open `[ ]` entry.
+
+## Example update
+
+Before:
+```
+- [ ] `agent/models.py` — implement `build_llm()` for ChatAnthropic and ChatHuggingFace
+```
+
+After implementing:
+```
+- [x] `agent/models.py` — implement `build_llm()` for ChatAnthropic and ChatHuggingFace
+```
+
+## Phase acceptance gates
+
+When all tasks under a phase are `[x]`, verify the acceptance gate condition at the top of that phase section. If the gate is met, add:
+
+```
+> Gate met — YYYY-MM-DD
+```

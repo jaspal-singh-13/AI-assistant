@@ -1,0 +1,15 @@
+{
+  "claude-sonnet-4-20250514": {
+    "input_cost_per_token": 0.000003,
+    "output_cost_per_token": 0.000015,
+    "max_tokens": 200000,
+    "max_output_tokens": 8192
+  },
+  "Qwen/Qwen2.5-0.5B-Instruct": {
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 32768,
+    "max_output_tokens": 2048,
+    "notes": "HF Spaces CPU free tier — $0 billed. Equivalent compute charged separately."
+  }
+}
