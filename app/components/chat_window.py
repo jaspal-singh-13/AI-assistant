@@ -29,11 +29,7 @@ BADGE_CSS = """
 
 
 def render_chat() -> None:
-    """
-    Render the full chat window for the active thread.
-
-    TODO (Phase 2): implement.
-    """
+    """Render the full chat window for the active thread."""
     thread = st.session_state.get("active_thread")
     if thread is None:
         st.info("Select or create a thread to start chatting.")
@@ -41,16 +37,16 @@ def render_chat() -> None:
 
     messages = thread.get("messages", [])
     _render_messages(messages)
+
+    # If a response is pending, run the agent now (user message already visible above)
+    from app.components.stream_handler import run_pending_response
+    run_pending_response()
+
     _render_input_box()
 
 
 def _render_messages(messages: list[dict]) -> None:
-    """
-    Render each message in the thread.
-
-    Inserts a divider line when the model changes mid-thread (FR-MOD-02).
-    TODO (Phase 2): implement.
-    """
+    """Render each message; insert a divider when the model changes mid-thread."""
     prev_model = None
     for msg in messages:
         role = msg.get("role", "user")
@@ -59,9 +55,11 @@ def _render_messages(messages: list[dict]) -> None:
         model_label = metadata.get("model_label")
         model_type = metadata.get("model_type", "frontier")
 
-        # Divider on model switch (FR-MOD-02)
         if role == "assistant" and model_label and model_label != prev_model and prev_model is not None:
-            st.markdown(f"<div style='text-align:center;color:gray;'>── switched to {model_label} ──</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div style='text-align:center;color:gray;'>── switched to {model_label} ──</div>",
+                unsafe_allow_html=True,
+            )
         if role == "assistant" and model_label:
             prev_model = model_label
 
@@ -75,21 +73,13 @@ def _render_messages(messages: list[dict]) -> None:
 
             st.markdown(content)
 
-            # State panel toggle (FR-AGT-04)
             if role == "assistant" and msg.get("state_snapshot"):
-                # TODO (Phase 2): from app.components.state_panel import render_state_panel
-                # render_state_panel(msg["state_snapshot"], metadata)
-                st.caption("Agent reasoning — TODO Phase 2")
+                from app.components.state_panel import render_state_panel
+                render_state_panel(msg["state_snapshot"], metadata)
 
 
 def _render_input_box() -> None:
-    """
-    Render the chat input box and handle message sending.
-
-    Calls the full pipeline: guardrails → agent → output guard → log → save.
-    TODO (Phase 2): implement with st.chat_input.
-    """
+    """Render the chat input and invoke handle_send on submit."""
     if prompt := st.chat_input("Type a message…"):
-        # TODO (Phase 2): from app.components.stream_handler import handle_send
-        # handle_send(prompt)
-        st.info(f"TODO Phase 2 — handle_send({prompt!r})")
+        from app.components.stream_handler import handle_send
+        handle_send(prompt)

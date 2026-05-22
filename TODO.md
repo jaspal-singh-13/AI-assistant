@@ -17,40 +17,41 @@
 
 ### agent/models.py
 - [x] `ModelConfig`, `MODELS` dict, `get_model()`, `list_models()` — 6 tests passing
-- [ ] `build_llm()` — ChatAnthropic for frontier, ChatHuggingFace for OSS
+- [x] `build_llm()` — ChatAnthropic for frontier, ChatHuggingFace for OSS
 
 ### agent/factory.py
-- [ ] `create_agent(llm, tools)` → CompiledGraph via `create_react_agent`
-- [ ] `run_agent()` — `graph.stream()` loop, returns `(response_str, state_snapshot)`
-- [ ] `_parse_message_to_step()` — AIMessage / ToolMessage → step dict with `call_id`
+- [x] `create_agent(llm, tools)` → CompiledGraph via `create_react_agent`
+- [x] `run_agent()` — `graph.stream()` loop, returns `(response_str, state_snapshot)`
+- [x] `_parse_message_to_step()` — AIMessage / ToolMessage → step dict with `call_id`
 
 ### memory/manager.py
 - [x] `get_context_label()` — dynamic slider label — 2 tests passing
-- [ ] `create_thread()` — UUID, auto-title from first 6 words, write JSON + index
-- [ ] `save_thread()` — persist to disk, sync `message_count` in index.json
-- [ ] `get_llm_context()` — sliding window + merged summary SystemMessage
-- [ ] `update_summaries()` — incremental cursor advance, summary-of-summary
+- [x] `create_thread()` — UUID, auto-title from first 6 words, write JSON + index
+- [x] `save_thread()` — persist to disk, sync `message_count` in index.json
+- [x] `get_llm_context()` — sliding window + merged summary SystemMessage
+- [x] `update_summaries()` — incremental cursor advance, summary-of-summary
 
 ### memory/summariser.py
-- [ ] `summarise(prev_text, messages)` — LLM call, returns updated summary string
-- [ ] `merge(summaries[])` — formats summaries into single SystemMessage content
+- [x] `summarise(prev_text, messages)` — LLM call, returns updated summary string
+- [x] `merge(summaries[])` — formats summaries into single SystemMessage content
 
 ### memory/converters.py
-- [ ] `dicts_to_messages()` — thread dicts → HumanMessage / AIMessage / ToolMessage
-- [ ] `message_to_dict()` — BaseMessage → thread JSON dict with timestamp
+- [x] `dicts_to_messages()` — thread dicts → HumanMessage / AIMessage / ToolMessage
+- [x] `message_to_dict()` — BaseMessage → thread JSON dict with timestamp
 
 ### tools/
-- [x] `tools/time_tool.py` — `get_current_time()` implemented — 2 tests passing
-- [ ] `tools/time_tool.py` — add `@tool` decorator once langchain installed
-- [ ] `tools/weather_tool.py` — wttr.in call, temp + condition, city-not-found fallback
-- [ ] `tools/search_tool.py` — DuckDuckGo top-5 results (title + snippet + URL)
-- [ ] `tools/metrics_tool.py` — parse calls.jsonl, return per-model avg latency / cost / block rate
-- [ ] `tools/registry.py` — `get_tools()` returns `[time, weather, search, metrics]`
+- [x] `tools/time_tool.py` — `get_current_time()` implemented with `@tool` decorator — 2 tests passing
+- [x] `tools/weather_tool.py` — wttr.in call, temp + condition, city-not-found fallback
+- [x] `tools/search_tool.py` — DuckDuckGo top-5 results (title + snippet + URL)
+- [x] `tools/metrics_tool.py` — parse calls.jsonl, return per-model avg latency / cost / block rate
+- [x] `tools/registry.py` — `get_tools()` returns `[time, weather, search, metrics]`
 
 ### tests/
-- [ ] `tests/test_agent.py` — unskip and implement `build_llm`, `create_agent`, `run_agent` tests
-- [ ] `tests/test_memory.py` — unskip and implement summarisation trigger + thread CRUD tests
-- [ ] `tests/test_tools.py` — unskip and implement weather (mocked), search (mocked), metrics tests
+- [x] `tests/test_agent.py` — unskip and implement `build_llm`, `create_agent`, `run_agent` tests
+- [x] `tests/test_memory.py` — unskip and implement summarisation trigger + thread CRUD tests
+- [x] `tests/test_tools.py` — unskip and implement weather (mocked), search (mocked), metrics tests
+
+> Gate met — 2026-05-23
 
 ---
 
@@ -60,23 +61,25 @@
 **Test gate:** No `FAILED`/`ERROR` in `tests/test_agent.py` integration tests.
 
 ### app/streamlit_app.py
-- [ ] Session state init, model dropdown, routing wired to sidebar + chat
+- [x] Session state init, model dropdown, routing wired to sidebar + chat
 
 ### app/components/thread_sidebar.py
-- [ ] Thread list with active highlight, new thread button, auto-title from first 6 words
-- [ ] Context window slider (5–50, default 10) + dynamic label from `get_context_label()`
+- [x] Thread list with active highlight, new thread button, auto-title from first 6 words
+- [x] Context window slider (5–50, default 10) + dynamic label from `get_context_label()`
 
 ### app/components/chat_window.py
-- [ ] Render all messages; blue badge = frontier, coral badge = OSS; hover shows tokens + cost
-- [ ] Mid-thread switch divider: `── switched to {model_label} ──`
+- [x] Render all messages; blue badge = frontier, coral badge = OSS; hover shows tokens + cost
+- [x] Mid-thread switch divider: `── switched to {model_label} ──`
 
 ### app/components/state_panel.py
-- [ ] Collapsible THINKING → TOOL CALL (args table, 80-char truncate) → RESPONDING panel
+- [x] Collapsible THINKING → TOOL CALL (args table, 80-char truncate) → RESPONDING panel
 
 ### app/components/stream_handler.py
-- [ ] `handle_send()` — full pipeline: input guard → agent → output guard → log → save thread
-- [ ] `stream_tokens()` — sync `graph.stream()` generator yielding token strings
-
+- [x] `handle_send()` — full pipeline: agent → log → save thread (guardrails wired in Phase 3)
+- [x] `stream_tokens()` — `stream_and_collect()` in factory.py yields tokens via `st.write_stream()`
+- [x] Chat auto-renaming — title updated from first 6 words of first user message
+- [ ] Chat thread delete and edit name functionality
+- [ ] Seperate 'New Chat' button which creates new chat
 ---
 
 ## Phase 3 — Monitoring & Guardrails

@@ -8,10 +8,8 @@ FR-MEM-05, FR §15.1.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from langchain_core.language_models import BaseChatModel
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage
 
 _SUMMARISE_PROMPT = """You are a conversation summariser. Produce a concise paragraph
 (under 150 words) that captures the key facts, user preferences, and decisions from the
@@ -26,14 +24,16 @@ New messages to incorporate:
 Return only the updated summary paragraph — no preamble, no bullet points."""
 
 
-def summarise(prev_text: str, messages: list[dict], llm: "BaseChatModel | None" = None) -> str:
+def summarise(prev_text: str, messages: list[dict], llm: BaseChatModel | None = None) -> str:
     """
     Produce an updated summary string from *prev_text* + *messages*.
 
-    *llm* defaults to a lightweight call (claude-haiku or equivalent) if None.
-
-    TODO (Phase 1): implement LLM call.
+    *llm* defaults to a lightweight Claude call if None.
     """
+    if llm is None:
+        from agent.models import build_llm
+        llm = build_llm("claude-sonnet")
+
     messages_text = "\n".join(
         f"[{m['role'].upper()}] {m['content']}" for m in messages
     )
@@ -41,8 +41,7 @@ def summarise(prev_text: str, messages: list[dict], llm: "BaseChatModel | None" 
         prev_summary=prev_text or "(none)",
         messages_text=messages_text,
     )
-    # TODO: call llm.invoke([HumanMessage(content=prompt)]) and return .content
-    raise NotImplementedError("Phase 1 — summarise")
+    return llm.invoke([HumanMessage(content=prompt)]).content
 
 
 def merge(summaries: list[dict]) -> str:

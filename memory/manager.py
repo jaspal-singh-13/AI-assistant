@@ -45,8 +45,6 @@ def create_thread(first_message: str = "") -> dict:
     Create a new thread, persist it, update index.json, and return the thread dict.
 
     Title is auto-generated from the first 6 words of *first_message* (FR-MEM-06).
-
-    TODO (Phase 1): implement.
     """
     thread_id = str(uuid.uuid4())[:8]
     title = " ".join(first_message.split()[:6]) or "New thread"
@@ -61,9 +59,19 @@ def create_thread(first_message: str = "") -> dict:
         "summaries": [],
         "messages": [],
     }
-    # TODO: save thread to THREADS_DIR/{thread_id}.json
-    # TODO: append entry to index.json
-    raise NotImplementedError("Phase 1 — create_thread")
+    THREADS_DIR.mkdir(parents=True, exist_ok=True)
+    path = THREADS_DIR / f"{thread_id}.json"
+    path.write_text(json.dumps(thread, indent=2, ensure_ascii=False), encoding="utf-8")
+    index = _load_index()
+    index["threads"].append({
+        "id": thread_id,
+        "title": title,
+        "created_at": now,
+        "updated_at": now,
+        "message_count": 0,
+    })
+    _save_index(index)
+    return thread
 
 
 def load_thread(thread_id: str) -> dict:
@@ -73,11 +81,16 @@ def load_thread(thread_id: str) -> dict:
 
 
 def save_thread(thread: dict) -> None:
-    """Persist a thread dict to disk and update index.json updated_at."""
+    """Persist a thread dict to disk and sync message_count + updated_at in index.json."""
     thread["updated_at"] = datetime.now(timezone.utc).isoformat()
     path = THREADS_DIR / f"{thread['id']}.json"
     path.write_text(json.dumps(thread, indent=2, ensure_ascii=False), encoding="utf-8")
-    # TODO: sync message_count in index.json entry
+    index = _load_index()
+    for entry in index["threads"]:
+        if entry["id"] == thread["id"]:
+            entry["updated_at"] = thread["updated_at"]
+            entry["message_count"] = len(thread["messages"])
+    _save_index(index)
 
 
 def list_threads() -> list[dict]:
@@ -105,28 +118,25 @@ def get_llm_context(thread: dict) -> list["BaseMessage"]:
 
     The context is NOT persisted — rebuilt on every call (FR-MEM-02).
     Summarisation is triggered here if threshold is met (FR §15.1).
-
-    TODO (Phase 1): implement.
     """
-    # from memory.converters import dicts_to_messages
-    # from memory.summariser import merge, summarise
-    #
-    # window = thread["context_window_size"]
-    # messages = thread["messages"]
-    # recent = messages[-window:]
-    # older = messages[:-window]
-    # new_uncovered = older[thread["summary_cursor"]:]
-    #
-    # if len(new_uncovered) >= window:
-    #     update_summaries(thread, new_uncovered)
-    #
-    # merged = merge(thread["summaries"])
-    # lc_messages = dicts_to_messages(recent)
-    # if merged:
-    #     from langchain_core.messages import SystemMessage
-    #     return [SystemMessage(content=merged)] + lc_messages
-    # return lc_messages
-    raise NotImplementedError("Phase 1 — get_llm_context")
+    from memory.converters import dicts_to_messages
+    from memory.summariser import merge, summarise
+
+    window = thread["context_window_size"]
+    messages = thread["messages"]
+    recent = messages[-window:]
+    older = messages[:-window]
+    new_uncovered = older[thread["summary_cursor"]:]
+
+    if len(new_uncovered) >= window:
+        update_summaries(thread, new_uncovered)
+
+    merged = merge(thread["summaries"])
+    lc_messages = dicts_to_messages(recent)
+    if merged:
+        from langchain_core.messages import SystemMessage
+        return [SystemMessage(content=merged)] + lc_messages
+    return lc_messages
 
 
 def update_summaries(thread: dict, new_uncovered: list[dict]) -> None:
@@ -134,17 +144,14 @@ def update_summaries(thread: dict, new_uncovered: list[dict]) -> None:
     Append a new incremental summary to thread["summaries"] and advance summary_cursor.
 
     Summary N+1 = summarise(summary_N_text, new_batch) — LLM never re-reads old messages.
-
-    TODO (Phase 1): implement.
     """
-    # from memory.summariser import summarise
-    # prev_text = thread["summaries"][-1]["text"] if thread["summaries"] else ""
-    # start_idx = thread["summary_cursor"] + 1
-    # end_idx = thread["summary_cursor"] + len(new_uncovered)
-    # new_text = summarise(prev_text, new_uncovered)
-    # thread["summaries"].append({"covers": f"{start_idx}-{end_idx}", "text": new_text})
-    # thread["summary_cursor"] += len(new_uncovered)
-    raise NotImplementedError("Phase 1 — update_summaries")
+    from memory.summariser import summarise
+    prev_text = thread["summaries"][-1]["text"] if thread["summaries"] else ""
+    start_idx = thread["summary_cursor"] + 1
+    end_idx = thread["summary_cursor"] + len(new_uncovered)
+    new_text = summarise(prev_text, new_uncovered)
+    thread["summaries"].append({"covers": f"{start_idx}-{end_idx}", "text": new_text})
+    thread["summary_cursor"] += len(new_uncovered)
 
 
 def get_context_label(thread: dict) -> str:

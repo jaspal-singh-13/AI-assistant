@@ -1,15 +1,15 @@
 {
-  "claude-sonnet-4-20250514": {
-    "input_cost_per_token": 0.000003,
-    "output_cost_per_token": 0.000015,
+  "claude-haiku-4-5-20251001": {
+    "input_cost_per_token": 0.0000008,
+    "output_cost_per_token": 0.000004,
     "max_tokens": 200000,
     "max_output_tokens": 8192
   },
-  "Qwen/Qwen2.5-0.5B-Instruct": {
+  "meta-llama/Llama-3.2-1B-Instruct": {
     "input_cost_per_token": 0.0,
     "output_cost_per_token": 0.0,
-    "max_tokens": 32768,
+    "max_tokens": 131072,
     "max_output_tokens": 2048,
-    "notes": "HF Spaces CPU free tier — $0 billed. Equivalent compute charged separately."
+    "notes": "HF Inference API serverless free tier."
   }
 }

@@ -18,9 +18,8 @@ if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
     from langgraph.graph.graph import CompiledGraph
 
-# TODO (Phase 1): uncomment once deps installed
-# import nest_asyncio
-# nest_asyncio.apply()  # enables async streaming from within Streamlit's event loop
+import nest_asyncio
+nest_asyncio.apply()  # enables async streaming from within Streamlit's event loop
 
 
 def create_agent(llm: "BaseChatModel", tools: list["BaseTool"]) -> "CompiledGraph":
@@ -29,12 +28,9 @@ def create_agent(llm: "BaseChatModel", tools: list["BaseTool"]) -> "CompiledGrap
 
     The graph is recreated on every model switch — cheap because it's just a
     graph compile, not a model download.
-
-    TODO (Phase 1): implement.
     """
-    # from langgraph.prebuilt import create_react_agent
-    # return create_react_agent(llm, tools)
-    raise NotImplementedError("Phase 1 — create_agent")
+    from langgraph.prebuilt import create_react_agent
+    return create_react_agent(llm, tools)
 
 
 def run_agent(
@@ -50,23 +46,64 @@ def run_agent(
     Each tool_call step includes call_id (FR §15.2).
 
     Returns (final_response, state_snapshot).
-
-    TODO (Phase 1): implement streaming loop.
     """
-    # steps: list[dict] = []
-    # final_response = ""
-    #
-    # for chunk in graph.stream({"messages": messages}, config, stream_mode="updates"):
-    #     for node_name, state in chunk.items():
-    #         for msg in state.get("messages", []):
-    #             step = _parse_message_to_step(msg)
-    #             if step:
-    #                 steps.append(step)
-    #                 if step["type"] == "response":
-    #                     final_response = step["content"]
-    #
-    # return final_response, steps
-    raise NotImplementedError("Phase 1 — run_agent")
+    steps: list[dict] = []
+    final_response = ""
+
+    for chunk in graph.stream({"messages": messages}, config, stream_mode="updates"):
+        for node_name, state in chunk.items():
+            for msg in state.get("messages", []):
+                step = _parse_message_to_step(msg)
+                if step:
+                    steps.append(step)
+                    if step["type"] == "response":
+                        final_response = step["content"]
+
+    return final_response, steps
+
+
+def stream_and_collect(
+    graph: "CompiledGraph",
+    messages: list[dict],
+    config: dict | None = None,
+) -> "tuple[Generator[str, None, None], list[dict]]":
+    """
+    Single-pass stream that:
+      - yields token strings for st.write_stream() display
+      - accumulates and returns the full state_snapshot
+
+    Uses stream_mode=['updates','messages'] so one LLM call feeds both.
+    Returns (token_generator, snapshot_list).
+    snapshot_list is populated in-place as the generator is consumed.
+    """
+    from typing import Generator
+    from langchain_core.messages import AIMessageChunk
+
+    snapshot: list[dict] = []
+
+    def _gen() -> "Generator[str, None, None]":
+        from langchain_core.messages import AIMessageChunk
+        for item in graph.stream(
+            {"messages": messages}, config, stream_mode=["updates", "messages"]
+        ):
+            mode, payload = item
+            if mode == "updates":
+                for _node, state in payload.items():
+                    for msg in state.get("messages", []):
+                        step = _parse_message_to_step(msg)
+                        if step:
+                            snapshot.append(step)
+            elif mode == "messages":
+                chunk, metadata = payload
+                if (
+                    isinstance(chunk, AIMessageChunk)
+                    and metadata.get("langgraph_node") == "agent"
+                    and isinstance(chunk.content, str)
+                    and chunk.content
+                ):
+                    yield chunk.content
+
+    return _gen(), snapshot
 
 
 def _parse_message_to_step(msg: Any) -> dict | None:
@@ -75,9 +112,24 @@ def _parse_message_to_step(msg: Any) -> dict | None:
 
     Step types:
       - "tool_call": {type, tool, args, call_id, latency_ms}
-      - "tool_result": merged into matching tool_call step
+      - "tool_result": {type, content, call_id}
       - "response": {type, content}
-
-    TODO (Phase 1): implement using AIMessage / ToolMessage isinstance checks.
     """
-    raise NotImplementedError("Phase 1 — _parse_message_to_step")
+    from langchain_core.messages import AIMessage, ToolMessage
+
+    if isinstance(msg, AIMessage):
+        if msg.tool_calls:
+            tc = msg.tool_calls[0]
+            return {
+                "type": "tool_call",
+                "tool": tc["name"],
+                "args": tc["args"],
+                "call_id": tc["id"],
+                "latency_ms": 0,
+            }
+        return {"type": "response", "content": msg.content}
+
+    if isinstance(msg, ToolMessage):
+        return {"type": "tool_result", "content": msg.content, "call_id": msg.tool_call_id}
+
+    return None

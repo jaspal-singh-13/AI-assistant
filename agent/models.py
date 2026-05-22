@@ -1,7 +1,12 @@
-"""Model registry — NFR-EXT-01: adding a new model = one entry in MODELS dict."""
+"""Model registry — loaded entirely from .env MODELS_<key> entries.
+
+To add a model: add one line to .env, nothing else.
+  MODELS_<key>=<model_id>|<label>|<type>   (type = frontier or oss)
+"""
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -10,68 +15,60 @@ ModelType = Literal["frontier", "oss"]
 
 @dataclass
 class ModelConfig:
-    """Configuration for a single LLM."""
-
     model_id: str
-    """LangChain / HuggingFace model identifier."""
     model_label: str
-    """Human-readable display name shown in the UI badge."""
     model_type: ModelType
-    """'frontier' (blue badge) or 'oss' (coral badge)."""
     hf_repo: str | None = None
-    """HuggingFace repo ID — required when model_type == 'oss'."""
     extra_kwargs: dict = field(default_factory=dict)
-    """Extra kwargs forwarded to the LangChain LLM constructor."""
 
 
-# ── Registry ──────────────────────────────────────────────────────────────────
-# NFR-EXT-01: To add a new model, append one entry here. No other file changes.
+def _load_models() -> dict[str, ModelConfig]:
+    from dotenv import load_dotenv
+    load_dotenv()
+    models: dict[str, ModelConfig] = {}
+    for env_key, value in os.environ.items():
+        if not env_key.startswith("MODELS_"):
+            continue
+        key = env_key[len("MODELS_"):].lower()
+        parts = value.split("|")
+        if len(parts) != 3:
+            raise ValueError(f"{env_key} must be 'model_id|label|type', got {value!r}")
+        model_id, label, model_type = (p.strip() for p in parts)
+        if model_type not in ("frontier", "oss"):
+            raise ValueError(f"{env_key}: type must be 'frontier' or 'oss', got {model_type!r}")
+        models[key] = ModelConfig(
+            model_id=model_id,
+            model_label=label,
+            model_type=model_type,  # type: ignore[arg-type]
+            hf_repo=model_id if model_type == "oss" else None,
+        )
+    return models
 
-MODELS: dict[str, ModelConfig] = {
-    "claude-sonnet": ModelConfig(
-        model_id="claude-sonnet-4-20250514",
-        model_label="Claude Sonnet",
-        model_type="frontier",
-    ),
-    "qwen-0.5b": ModelConfig(
-        model_id="Qwen/Qwen2.5-0.5B-Instruct",
-        model_label="Qwen 2.5 0.5B",
-        model_type="oss",
-        hf_repo="Qwen/Qwen2.5-0.5B-Instruct",
-    ),
-}
 
-DEFAULT_MODEL_KEY = "claude-sonnet"
+MODELS: dict[str, ModelConfig] = _load_models()
+DEFAULT_MODEL_KEY = os.environ.get("DEFAULT_MODEL_KEY", next(iter(MODELS)) if MODELS else "")
 
 
 def get_model(key: str) -> ModelConfig:
-    """Return ModelConfig for *key*, raising ValueError on unknown keys."""
     if key not in MODELS:
         raise ValueError(f"Unknown model key: {key!r}. Available: {list(MODELS)}")
     return MODELS[key]
 
 
 def list_models() -> list[tuple[str, ModelConfig]]:
-    """Return all (key, config) pairs for the UI dropdown."""
     return list(MODELS.items())
 
 
 def build_llm(key: str):
-    """
-    Instantiate and return the LangChain LLM for *key*.
-
-    - Frontier (Claude): ChatAnthropic using ANTHROPIC_API_KEY from env.
-    - OSS (Qwen): ChatHuggingFace via HuggingFaceEndpoint using HUGGINGFACE_TOKEN.
-
-    TODO (Phase 1): implement full LLM construction.
-    """
     config = get_model(key)
     if config.model_type == "frontier":
-        # TODO: from langchain_anthropic import ChatAnthropic
-        # return ChatAnthropic(model=config.model_id, **config.extra_kwargs)
-        raise NotImplementedError("Phase 1 — build_llm frontier")
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(model=config.model_id, **config.extra_kwargs)
     else:
-        # TODO: from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
-        # endpoint = HuggingFaceEndpoint(repo_id=config.hf_repo, ...)
-        # return ChatHuggingFace(llm=endpoint, **config.extra_kwargs)
-        raise NotImplementedError("Phase 1 — build_llm oss")
+        from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+        endpoint = HuggingFaceEndpoint(
+            repo_id=config.hf_repo,
+            huggingfacehub_api_token=os.environ.get("HF_TOKEN"),
+            **config.extra_kwargs,
+        )
+        return ChatHuggingFace(llm=endpoint)

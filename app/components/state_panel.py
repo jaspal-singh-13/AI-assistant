@@ -16,14 +16,7 @@ MAX_RESULT_LEN = 200  # truncate tool results to 200 chars (FR-AGT-04)
 
 
 def render_state_panel(state_snapshot: list[dict], metadata: dict) -> None:
-    """
-    Render the collapsible 'Agent reasoning' panel for one assistant message.
-
-    state_snapshot schema (each step):
-      {type: "thinking"|"tool_call"|"response", tool?, args?, call_id?, result?, latency_ms?}
-
-    TODO (Phase 2): implement.
-    """
+    """Render the collapsible 'Agent reasoning' panel for one assistant message."""
     if not state_snapshot:
         return
 
@@ -36,11 +29,7 @@ def render_state_panel(state_snapshot: list[dict], metadata: dict) -> None:
 
 
 def _render_steps(steps: list[dict]) -> None:
-    """
-    Render each step in sequence.
-
-    TODO (Phase 2): implement with st.markdown / st.code.
-    """
+    """Render each step in sequence."""
     tool_steps = [s for s in steps if s.get("type") == "tool_call"]
 
     if not tool_steps:

@@ -5,19 +5,13 @@ FR-TOOL-02: No external API, no API key required.
 
 from __future__ import annotations
 
-# TODO (Phase 1): uncomment once langchain is installed
-# from langchain_core.tools import tool
-# from datetime import datetime, timezone
-#
-# @tool
-# def get_current_time() -> str:
-#     """Return the current date and time with UTC offset."""
-#     now = datetime.now(timezone.utc).astimezone()
-#     return now.strftime("%Y-%m-%d %H:%M:%S %Z")
+from datetime import datetime, timezone
+
+from langchain_core.tools import tool
 
 
+@tool
 def get_current_time() -> str:
-    """Return the current date and time with UTC offset. (stub — Phase 1)"""
-    from datetime import datetime, timezone
+    """Return the current date and time with UTC offset."""
     now = datetime.now(timezone.utc).astimezone()
     return now.strftime("%Y-%m-%d %H:%M:%S %Z")
