@@ -1,6 +1,6 @@
 # AI Assistant Comparison
 
-Two AI assistants — one powered by **Claude Sonnet** (frontier), one by **Qwen 2.5 0.5B** (open-source) — evaluated on hallucination, bias, and content safety.
+Two AI assistants — one powered by **Claude Haiku** (frontier), one by **Qwen 2.5 7B** (open-source) — evaluated on hallucination, bias, and content safety.
 
 > **Status:** Boilerplate scaffold — implementation in progress (see [TODO.md](TODO.md)).
 
@@ -85,6 +85,7 @@ Observability logger → logs/calls.jsonl
 | Judge debiasing | Position swap — run every comparison twice | Eliminates largest source of LLM judge noise |
 | Input guard order | Rebuff (5ms) → LlamaGuard (300ms) → Presidio (local) | Cheapest check first |
 | OSS hosting | HF Spaces CPU free tier | Free, public URL, meets assignment requirement |
+|| OSS tool calling | HF Router via ChatOpenAI client (router.huggingface.co/v1) | ChatHuggingFace + HuggingFaceEndpoint does not propagate tool schemas correctly so the model outputs raw JSON text instead of structured tool_calls. The HF Router exposes an OpenAI-compatible API that fixes this while still running Llama on HF infrastructure with the same HF_TOKEN. No OpenAI account needed. |
 
 ---
 
