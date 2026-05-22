@@ -78,8 +78,15 @@
 - [x] `handle_send()` — full pipeline: agent → log → save thread (guardrails wired in Phase 3)
 - [x] `stream_tokens()` — `stream_and_collect()` in factory.py yields tokens via `st.write_stream()`
 - [x] Chat auto-renaming — title updated from first 6 words of first user message
-- [ ] Chat thread delete and edit name functionality
-- [ ] Seperate 'New Chat' button which creates new chat
+
+### app/components/thread_sidebar.py (additions)
+- [x] Chat thread delete and edit name functionality
+- [x] Separate 'New Chat' button which creates new chat
+
+### agent/factory.py (fix)
+- [x] Response should stream token by token (content block extraction fix)
+
+> Gate met — 2026-05-23
 ---
 
 ## Phase 3 — Monitoring & Guardrails

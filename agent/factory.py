@@ -98,12 +98,25 @@ def stream_and_collect(
                 if (
                     isinstance(chunk, AIMessageChunk)
                     and metadata.get("langgraph_node") == "agent"
-                    and isinstance(chunk.content, str)
-                    and chunk.content
                 ):
-                    yield chunk.content
+                    text = _extract_text(chunk.content)
+                    if text:
+                        yield text
 
     return _gen(), snapshot
+
+
+def _extract_text(content: Any) -> str:
+    """Return plain text from a message content value (str or list of content blocks)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            block["text"] if isinstance(block, dict) else str(block)
+            for block in content
+            if not isinstance(block, dict) or block.get("type") == "text"
+        )
+    return str(content)
 
 
 def _parse_message_to_step(msg: Any) -> dict | None:
@@ -127,9 +140,9 @@ def _parse_message_to_step(msg: Any) -> dict | None:
                 "call_id": tc["id"],
                 "latency_ms": 0,
             }
-        return {"type": "response", "content": msg.content}
+        return {"type": "response", "content": _extract_text(msg.content)}
 
     if isinstance(msg, ToolMessage):
-        return {"type": "tool_result", "content": msg.content, "call_id": msg.tool_call_id}
+        return {"type": "tool_result", "content": _extract_text(msg.content), "call_id": msg.tool_call_id}
 
     return None

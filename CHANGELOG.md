@@ -8,6 +8,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-05-23
+
+### Fixed
+- `agent/factory.py` — `_extract_text()`: normalises `AIMessage.content` from list-of-content-blocks to plain string, fixing raw `[{'text': ..., 'type': 'text'}]` display in the chat window
+- `agent/factory.py` — streaming path: `_extract_text()` also applied to `AIMessageChunk.content` so token-by-token streaming works with block-format responses
+
+### Added
+- `memory/manager.py` — `delete_thread()`: removes thread JSON file and index entry
+- `memory/manager.py` — `rename_thread()`: updates thread title and persists
+- `app/components/thread_sidebar.py` — inline rename form (text input + Save/Cancel) per thread row
+- `app/components/thread_sidebar.py` — delete button (🗑️) per thread row with active-thread guard
+- `app/components/thread_sidebar.py` — prominent primary "New Chat" button at top of sidebar, separate from thread list
+
 ## [0.3.1] — 2026-05-23
 
 ### Added

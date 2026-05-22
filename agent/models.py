@@ -69,6 +69,7 @@ def build_llm(key: str):
         endpoint = HuggingFaceEndpoint(
             repo_id=config.hf_repo,
             huggingfacehub_api_token=os.environ.get("HF_TOKEN"),
+            provider="auto",
             **config.extra_kwargs,
         )
         return ChatHuggingFace(llm=endpoint)

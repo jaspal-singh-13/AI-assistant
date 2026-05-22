@@ -102,6 +102,22 @@ def list_threads() -> list[dict]:
     )
 
 
+def delete_thread(thread_id: str) -> None:
+    """Delete thread JSON file and remove from index."""
+    path = THREADS_DIR / f"{thread_id}.json"
+    if path.exists():
+        path.unlink()
+    index = _load_index()
+    index["threads"] = [t for t in index["threads"] if t["id"] != thread_id]
+    _save_index(index)
+
+
+def rename_thread(thread: dict, new_title: str) -> None:
+    """Update thread title and persist."""
+    thread["title"] = new_title.strip() or "New thread"
+    save_thread(thread)
+
+
 def append_message(thread: dict, message: dict) -> None:
     """Append a message dict to thread["messages"] and save."""
     thread["messages"].append(message)
