@@ -47,21 +47,56 @@ def run_input_pipeline(text: str) -> GuardResult:
     to the agent — return a canned refusal string to the user instead.
 
     PII entities are always returned in result.pii_entities (may be empty list).
+    result.stages contains per-stage breakdown for UI display.
     """
+    stages: list[dict] = []
+
     # Stage 1 — Heuristic injection detection
     rebuff_result = _check_injection(text)
+    stages.append({
+        "name": "Injection check",
+        "passed": not rebuff_result.blocked,
+        "latency_ms": rebuff_result.latency_ms,
+        "detail": rebuff_result.reason if rebuff_result.blocked else None,
+    })
     if rebuff_result.blocked:
+        rebuff_result.stages = stages
         return rebuff_result
 
     # Stage 2 — LlamaGuard 3
     from guardrails.llamaguard import classify
     lg_result = classify(text, role="user")
+    _SKIP_REASONS = {"llamaguard_skipped_no_token", "llamaguard_error"}
+    lg_skipped = lg_result.reason in _SKIP_REASONS
+    stages.append({
+        "name": "LlamaGuard 3 (13 categories)",
+        "passed": not lg_result.blocked,
+        "skipped": lg_skipped,
+        "latency_ms": lg_result.latency_ms,
+        "detail": (
+            "no HF token — skipped" if lg_result.reason == "llamaguard_skipped_no_token"
+            else "API error — skipped" if lg_result.reason == "llamaguard_error"
+            else lg_result.category if lg_result.blocked
+            else None
+        ),
+    })
     if lg_result.blocked:
+        lg_result.stages = stages
         return lg_result
 
     # Stage 3 — Presidio (redact only, never blocks)
+    t0 = time.perf_counter()
     pii_entities = _detect_pii(text)
-    return GuardResult(blocked=False, pii_entities=pii_entities)
+    pii_latency = (time.perf_counter() - t0) * 1000
+    pii_count = len(pii_entities)
+    stages.append({
+        "name": "Presidio PII",
+        "passed": True,
+        "latency_ms": pii_latency,
+        "detail": f"{pii_count} {'entity' if pii_count == 1 else 'entities'} detected (redacted from logs)" if pii_count else None,
+    })
+    total_latency = sum(s["latency_ms"] for s in stages)
+    return GuardResult(blocked=False, pii_entities=pii_entities, latency_ms=total_latency, stages=stages)
 
 
 def _check_injection(text: str) -> GuardResult:

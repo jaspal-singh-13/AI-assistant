@@ -24,6 +24,8 @@ class GuardResult:
     pii_entities: list | None = None
     """Presidio entities detected (even if not blocked)."""
     latency_ms: float = 0.0
+    stages: list = field(default_factory=list)
+    """Per-stage breakdown: [{"name": str, "passed": bool, "latency_ms": float, "detail": str|None}]"""
 
 
 # Maps LlamaGuard category codes → readable names
@@ -63,11 +65,11 @@ def classify(text: str, role: str = "user") -> GuardResult:
     """
     import requests
 
-    hf_token = os.environ.get("HUGGINGFACE_TOKEN", "")
+    hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN", "")
     if not hf_token:
         return GuardResult(blocked=False, reason="llamaguard_skipped_no_token")
 
-    api_url = "https://api-inference.huggingface.co/models/meta-llama/LlamaGuard-3-8B"
+    api_url = "https://router.huggingface.co/hf-inference/models/meta-llama/LlamaGuard-3-8B"
     headers = {"Authorization": f"Bearer {hf_token}"}
     prompt = _LLAMAGUARD_PROMPT_TEMPLATE.format(role=role, text=text)
 
@@ -76,7 +78,9 @@ def classify(text: str, role: str = "user") -> GuardResult:
         resp = requests.post(api_url, headers=headers, json={"inputs": prompt}, timeout=15)
         resp.raise_for_status()
         result_text = resp.json()[0]["generated_text"].strip().lower()
-    except Exception:
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("LlamaGuard API error: %s", exc)
         return GuardResult(blocked=False, reason="llamaguard_error")
     latency_ms = (time.perf_counter() - t0) * 1000
 

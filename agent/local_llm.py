@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, Iterator, List, Optional
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 
 _PIPELINES: dict[str, Any] = {}
@@ -52,14 +52,15 @@ class LocalTransformersChatModel(BaseChatModel):
         run_manager: Optional[Any] = None,
         **kwargs: Any,
     ) -> ChatResult:
+        from transformers import GenerationConfig
         pipe = _get_pipeline(self.model_name)
         hf_messages = _to_hf_messages(messages)
-        output = pipe(
-            hf_messages,
+        gen_cfg = GenerationConfig(
             max_new_tokens=self.max_new_tokens,
             do_sample=self.temperature > 0,
-            temperature=self.temperature if self.temperature > 0 else None,
+            temperature=self.temperature if self.temperature > 0 else 1.0,
         )
+        output = pipe(hf_messages, generation_config=gen_cfg)
         generated = output[0]["generated_text"]
         text = ""
         if isinstance(generated, list):
@@ -81,7 +82,7 @@ class LocalTransformersChatModel(BaseChatModel):
     ) -> Iterator[ChatGenerationChunk]:
         result = self._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
         text = result.generations[0].message.content
-        yield ChatGenerationChunk(message=AIMessage(content=text))
+        yield ChatGenerationChunk(message=AIMessageChunk(content=text))
 
     def bind_tools(self, tools: Any, **kwargs: Any) -> "LocalTransformersChatModel":
         # Qwen 0.5B doesn't support tool calling — return self unchanged so

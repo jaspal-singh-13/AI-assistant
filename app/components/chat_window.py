@@ -77,6 +77,10 @@ def _render_messages(messages: list[dict]) -> None:
                 from app.components.state_panel import render_state_panel
                 render_state_panel(msg["state_snapshot"], metadata)
 
+            if role == "assistant" and metadata:
+                from app.components.guardrail_panel import render_guardrail_panel
+                render_guardrail_panel(metadata)
+
 
 def _render_input_box() -> None:
     """Render the chat input and invoke handle_send on submit."""

@@ -124,9 +124,22 @@ def run_pending_response() -> None:
             "content": CANNED_REFUSAL,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "state_snapshot": [],
-            "metadata": {"model_label": config.model_label, "model_type": config.model_type,
-                         "latency_ms": round(input_guard.latency_ms, 2),
-                         "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+            "metadata": {
+                "model_label": config.model_label,
+                "model_type": config.model_type,
+                "latency_ms": round(input_guard.latency_ms, 2),
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_usd": 0.0,
+                "input_guard": {
+                    "blocked": True,
+                    "reason": input_guard.reason,
+                    "pii_count": len(input_guard.pii_entities or []),
+                    "latency_ms": round(input_guard.latency_ms, 2),
+                    "stages": input_guard.stages,
+                },
+                "output_guard": None,
+            },
         }
         append_message(thread, assistant_dict)
         st.session_state["threads"] = list_threads()
@@ -226,6 +239,19 @@ def run_pending_response() -> None:
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0.0,
+            "input_guard": {
+                "blocked": False,
+                "reason": None,
+                "pii_count": len(input_guard.pii_entities or []),
+                "latency_ms": round(input_guard.latency_ms, 2),
+                "stages": input_guard.stages,
+            },
+            "output_guard": {
+                "blocked": output_guard.blocked,
+                "reason": output_guard.reason,
+                "latency_ms": round(output_guard.latency_ms, 2),
+                "stages": output_guard.stages,
+            },
         },
     }
     append_message(thread, assistant_dict)

@@ -24,19 +24,48 @@ def run_output_pipeline(response_text: str) -> GuardResult:
     Run the full output guardrail pipeline on the agent's *response_text*.
 
     Returns GuardResult. If blocked=True, replace response with CANNED_OUTPUT_REFUSAL.
+    result.stages contains per-stage breakdown for UI display.
     """
+    import time
+    stages: list[dict] = []
+
     # Stage 1 — heuristic validators
+    t0 = time.perf_counter()
     guard_result = _check_validators(response_text)
+    val_latency = (time.perf_counter() - t0) * 1000
+    stages.append({
+        "name": "Heuristic validators",
+        "passed": not guard_result.blocked,
+        "latency_ms": val_latency,
+        "detail": guard_result.reason if guard_result.blocked else None,
+    })
     if guard_result.blocked:
+        guard_result.stages = stages
         return guard_result
 
     # Stage 2 — LlamaGuard 3 re-check on output
     from guardrails.llamaguard import classify
     lg_result = classify(response_text, role="assistant")
+    _SKIP_REASONS = {"llamaguard_skipped_no_token", "llamaguard_error"}
+    lg_skipped = lg_result.reason in _SKIP_REASONS
+    stages.append({
+        "name": "LlamaGuard 3 re-check",
+        "passed": not lg_result.blocked,
+        "skipped": lg_skipped,
+        "latency_ms": lg_result.latency_ms,
+        "detail": (
+            "no HF token — skipped" if lg_result.reason == "llamaguard_skipped_no_token"
+            else "API error — skipped" if lg_result.reason == "llamaguard_error"
+            else lg_result.category if lg_result.blocked
+            else None
+        ),
+    })
     if lg_result.blocked:
+        lg_result.stages = stages
         return lg_result
 
-    return GuardResult(blocked=False)
+    total_latency = sum(s["latency_ms"] for s in stages)
+    return GuardResult(blocked=False, latency_ms=total_latency, stages=stages)
 
 
 def _check_validators(response_text: str) -> GuardResult:

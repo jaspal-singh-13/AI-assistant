@@ -8,6 +8,28 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-05-24
+
+### Fixed
+- Fixed `ValidationError` crash in `agent/local_llm.py` `_stream()`: replaced `AIMessage` with `AIMessageChunk` when yielding `ChatGenerationChunk`, satisfying LangChain's `BaseMessageChunk` type constraint
+- Updated LlamaGuard API endpoint in `guardrails/llamaguard.py` from decommissioned `api-inference.huggingface.co` to `router.huggingface.co/hf-inference` (legacy endpoint returned HTTP 410 and no longer resolves in DNS)
+
+## [0.5.2] — 2026-05-24
+
+### Fixed
+- Updated `DEEPEVAL_JUDGE_MODEL` in `.env` and `.env.example` from deprecated `claude-3-haiku-20240307` to `claude-haiku-4-5-20251001`, resolving 404 errors from DeepEval's Anthropic judge during eval runs
+- Fixed transformers `generation_config` deprecation warnings in `agent/local_llm.py` by passing a `GenerationConfig` object instead of individual generation kwargs to the pipeline
+
+## [0.5.1] — 2026-05-24
+
+### Added
+- `app/components/guardrail_panel.py` — new collapsible panel that renders per-stage input and output guardrail results below each assistant message
+- `guardrails/llamaguard.py` — added `stages` field to `GuardResult` dataclass to carry per-stage breakdown for UI display
+- `guardrails/input_guard.py` — `run_input_pipeline()` now populates `stages` list with name, passed, latency_ms, and detail for each of the three stages; total latency accumulated across all stages
+- `guardrails/output_guard.py` — `run_output_pipeline()` now populates `stages` list for heuristic validator and LlamaGuard 3 re-check stages
+- `app/components/stream_handler.py` — saves `input_guard` and `output_guard` dicts (blocked, reason, pii_count, latency_ms, stages) into every assistant message's metadata; blocked-input path stores `output_guard: null`
+- `app/components/chat_window.py` — calls `render_guardrail_panel(metadata)` for every assistant message
+
 ## [0.5.0] — 2026-05-24
 
 ### Added

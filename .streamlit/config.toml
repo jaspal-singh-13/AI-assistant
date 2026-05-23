@@ -1,0 +1,5 @@
+[server]
+# Disable file watching entirely to prevent Streamlit from scanning the
+# transformers library on every save, which produces hundreds of log lines.
+# Hot-reload still works via manual browser refresh (press R).
+fileWatcherType = "none"

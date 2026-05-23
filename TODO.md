@@ -132,6 +132,14 @@
 [x] `config.yml` and `rails.co` — 4 declarative rails written
 [ ] End-to-end test that NeMo rails load and trigger correctly
 
+### guardrails — UI metadata
+[x] `GuardResult.stages` field added to `llamaguard.py` — per-stage breakdown for UI
+[x] `run_input_pipeline()` populates stages (injection check + LlamaGuard 3 + Presidio) with latency + detail
+[x] `run_output_pipeline()` populates stages (heuristic validators + LlamaGuard 3 re-check) with latency + detail
+[x] `stream_handler.py` saves `input_guard` + `output_guard` dicts into every assistant message metadata
+[x] `app/components/guardrail_panel.py` — `render_guardrail_panel()` collapsible expander per message
+[x] `chat_window.py` calls `render_guardrail_panel(metadata)` for every assistant message
+
 ### app/pages/02_observability.py
 [x] Row 1: metric cards — calls, avg latency, total cost, cost/1k per model
 [x] Row 2+3: cost per call line chart + cumulative cost area chart

@@ -17,6 +17,9 @@ from __future__ import annotations
 from dotenv import load_dotenv
 load_dotenv()  # must run before any langchain/anthropic imports read env vars
 
+import logging
+logging.getLogger("transformers").setLevel(logging.ERROR)
+
 import nest_asyncio
 nest_asyncio.apply()
 
