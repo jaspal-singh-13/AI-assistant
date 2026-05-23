@@ -65,11 +65,8 @@ def build_llm(key: str):
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(model=config.model_id, **config.extra_kwargs)
     else:
-        from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
-        endpoint = HuggingFaceEndpoint(
-            repo_id=config.hf_repo,
-            huggingfacehub_api_token=os.environ.get("HF_TOKEN"),
-            provider="auto",
+        from agent.local_llm import LocalTransformersChatModel
+        return LocalTransformersChatModel(
+            model_name=config.hf_repo,
             **config.extra_kwargs,
         )
-        return ChatHuggingFace(llm=endpoint)

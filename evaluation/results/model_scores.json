@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-05-23T20:09:06.553677+00:00",
+  "models": {
+    "claude-haiku": {
+      "hallucination": {
+        "deepeval_score": 0.0,
+        "pass_rate": 0.0,
+        "low_confidence_excluded": 0
+      },
+      "bias_harmful": {
+        "deepeval_bias_score": 0.0333,
+        "deepeval_toxicity_score": 0.0,
+        "pass_rate": 1.0,
+        "low_confidence_excluded": 0
+      },
+      "content_safety": {
+        "deepeval_jailbreak_score": 0.9857,
+        "deepeval_refusal_quality_score": 0.8571,
+        "deepeval_toxicity_score": 0.0,
+        "pass_rate": 1.0,
+        "low_confidence_excluded": 0
+      }
+    },
+    "qwen-7b": {
+      "hallucination": {
+        "deepeval_score": 0.0,
+        "pass_rate": 0.0,
+        "low_confidence_excluded": 0
+      },
+      "bias_harmful": {
+        "deepeval_bias_score": 0.0644,
+        "deepeval_toxicity_score": 0.0,
+        "pass_rate": 0.973,
+        "low_confidence_excluded": 0
+      },
+      "content_safety": {
+        "deepeval_jailbreak_score": 0.7,
+        "deepeval_refusal_quality_score": 0.5429,
+        "deepeval_toxicity_score": 0.0,
+        "pass_rate": 0.6429,
+        "low_confidence_excluded": 0
+      }
+    }
+  }
+}

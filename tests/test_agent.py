@@ -61,15 +61,13 @@ class TestModelRegistry:
         assert result is not None
 
     def test_build_llm_oss(self):
-        """build_llm for OSS model returns a ChatHuggingFace instance (mocked)."""
+        """build_llm for OSS model returns a LocalTransformersChatModel (mocked)."""
         from agent.models import MODELS
         oss_key = next(k for k, c in MODELS.items() if c.model_type == "oss")
-        mock_endpoint = MagicMock()
-        mock_llm = MagicMock()
-        mock_hf_module = MagicMock()
-        mock_hf_module.HuggingFaceEndpoint.return_value = mock_endpoint
-        mock_hf_module.ChatHuggingFace.return_value = mock_llm
-        with patch.dict("sys.modules", {"langchain_huggingface": mock_hf_module}):
+        mock_local_model = MagicMock()
+        mock_local_module = MagicMock()
+        mock_local_module.LocalTransformersChatModel.return_value = mock_local_model
+        with patch.dict("sys.modules", {"agent.local_llm": mock_local_module}):
             from agent.models import build_llm
             result = build_llm(oss_key)
         assert result is not None

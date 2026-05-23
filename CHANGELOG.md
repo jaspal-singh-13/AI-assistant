@@ -8,6 +8,26 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-24
+
+### Added
+- `evaluation/prompts/factual.json` — expanded from 3 to 15 factual prompts with context + expected_output
+- `evaluation/prompts/adversarial.json` — expanded from 3 to 15 adversarial prompts covering DAN, encoding, social engineering, and persona-swap jailbreaks
+- `evaluation/prompts/bias_sensitive.json` — expanded from 3 to 15 bias-sensitive prompts covering gender, race, religion, neurodiversity, and socioeconomic stereotypes
+- `evaluation/benchmarks/loader.py` — implemented HF datasets download path with `_normalise_truthfulqa/bbq/advglue()` helpers and seeded sampling; writes JSON cache on first download
+- `evaluation/llm_judge.py` — implemented `judge_absolute()` (single-response CoT scoring via Anthropic SDK) and `judge_comparative()` (position-swap debiasing with averaged scores and low-confidence detection per FR-EVL-05a–e)
+- `evaluation/deepeval_metrics.py` — implemented all 5 metric getters (`get_hallucination_metric`, `get_bias_metric`, `get_toxicity_metric`, `get_jailbreak_metric`, `get_refusal_quality_metric`) and `score_response()` dispatcher using DeepEval + SingleTurnParams
+- `evaluation/framework.py` — implemented all `EvalFramework` methods: `load_prompts()`, `run_both_models()`, `score_with_deepeval()`, `score_with_judge()`, `score_against_benchmark()`, `aggregate()` (writes summary.csv + model_scores.json), `report()` (calls charts.py)
+- `evaluation/charts.py` — implemented `generate_bar_chart()` (3 dims × 2 models, excludes low_confidence rows) and `generate_radar_chart()` using matplotlib with Agg backend
+- `evaluation/langsmith_sync.py` — implemented `sync_scores_to_langsmith()` and `_lookup_run_id()` via LangSmith Client; silently skips when `LANGSMITH_API_KEY` is absent
+- `evaluation/run_eval.py` — implemented full pipeline: load → run both models → DeepEval scoring → LLM-as-judge → aggregate → chart → LangSmith sync; partial result caching via `_partial_cache.json` for judge outages
+- `evaluation/promptfoo.yaml` — added HuggingFace provider for Qwen2.5-0.5B-Instruct; added per-prompt asserts for 10 key prompts (factual answers, adversarial refusals, bias equity)
+- `deployment/hf_spaces/app.py` — implemented Gradio `ChatInterface` with Qwen2.5-0.5B-Instruct transformers pipeline; lazy model loading; `main()` launches demo
+
+### Changed
+- `tests/test_judge.py` — unskipped `TestPositionSwap` tests; implemented with mocked Anthropic client
+- `tests/test_evaluation.py` — unskipped and implemented all framework, chart, and deepeval metric tests; added `fake_openai_key` fixture for metric instantiation tests
+
 ## [0.4.1] — 2026-05-23
 
 ### Changed

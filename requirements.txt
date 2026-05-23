@@ -27,6 +27,9 @@ streamlit>=1.35
 
 # Deploy
 gradio>=4.0
+transformers>=4.40
+torch>=2.2
+accelerate>=0.30
 
 # Utilities
 nest_asyncio>=1.6
