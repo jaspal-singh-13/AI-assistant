@@ -44,10 +44,20 @@ def handle_send(user_message: str) -> None:
     st.rerun()
 
 
+_THINKING_HTML = "<span style='color:#888;font-style:italic'>▪ Thinking…</span>"
+
+
 def run_pending_response() -> None:
     """
     Stage 2: called on every render when pending_response is True.
-    Streams tokens live into the assistant bubble, collects snapshot, saves, reruns.
+
+    Consumes stream_events() and renders:
+      - "▪ Thinking…"  while the LLM is computing
+      - "🔧 Calling `tool`…"  while a tool is executing
+      - streamed text with a blinking cursor once tokens arrive
+
+    The state panel expander (shown after the response is saved) provides
+    the full tool call / tool result detail.
     """
     if not st.session_state.get("pending_response"):
         return
@@ -61,7 +71,7 @@ def run_pending_response() -> None:
         st.session_state["pending_response"] = False
         return
 
-    from agent.factory import stream_and_collect
+    from agent.factory import stream_events
     from agent.models import get_model
     from memory.manager import append_message, get_llm_context, list_threads
     from observability.logger import log_call
@@ -71,18 +81,51 @@ def run_pending_response() -> None:
     msg_dicts = _lc_to_dicts(lc_messages)
 
     t_start = time.time()
-    token_gen, snapshot = stream_and_collect(graph, msg_dicts)
+    snapshot: list[dict] = []
+    full_response = ""
+    tokens_started = False
 
     with st.chat_message("assistant"):
-        response = st.write_stream(token_gen)
+        status = st.empty()
+        response_area = st.empty()
+
+        status.markdown(_THINKING_HTML, unsafe_allow_html=True)
+
+        for event in stream_events(graph, msg_dicts):
+            etype = event.get("type")
+
+            if etype == "tool_call":
+                snapshot.append(event)
+                tool = event.get("tool", "tool")
+                status.markdown(
+                    f"<span style='color:#888;font-style:italic'>"
+                    f"🔧 Calling <code>{tool}</code>…</span>",
+                    unsafe_allow_html=True,
+                )
+
+            elif etype == "tool_result":
+                snapshot.append(event)
+                # Resume "Thinking…" while the LLM digests the result
+                status.markdown(_THINKING_HTML, unsafe_allow_html=True)
+
+            elif etype == "token":
+                if not tokens_started:
+                    status.empty()
+                    tokens_started = True
+                full_response += event["text"]
+                response_area.markdown(full_response + "▌")
+
+            elif etype == "response":
+                snapshot.append(event)
+                if not full_response:
+                    full_response = event.get("content", "")
+
+        # Remove the blinking cursor once streaming finishes
+        status.empty()
+        if full_response:
+            response_area.markdown(full_response)
 
     latency_ms = (time.time() - t_start) * 1000
-
-    # Fallback: if write_stream returned nothing (e.g. tool-only response), read snapshot
-    if not response:
-        response = next(
-            (s["content"] for s in reversed(snapshot) if s.get("type") == "response"), ""
-        )
 
     log_call(
         model_id=config.model_id,
@@ -100,7 +143,7 @@ def run_pending_response() -> None:
 
     assistant_dict = {
         "role": "assistant",
-        "content": response,
+        "content": full_response,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "state_snapshot": snapshot,
         "metadata": {

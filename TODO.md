@@ -86,6 +86,10 @@
 ### agent/factory.py (fix)
 - [x] Response should stream token by token (content block extraction fix)
 
+- [x] Show typing till the assistant is generating token
+- [x] Each tool call should be shown, instead of typing when tool being called. Like how chatgpt implemented thinking. similarly should be shown on UI
+
+
 > Gate met — 2026-05-23
 ---
 

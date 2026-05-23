@@ -24,6 +24,7 @@ INDEX_PATH = MEMORY_DIR / "index.json"
 THREADS_DIR = MEMORY_DIR / "threads"
 
 DEFAULT_CONTEXT_WINDOW = 10
+DEFAULT_SUMMARY_TRIGGER = 10   # summarise when this many messages fall outside the window
 
 
 # ── Index helpers ──────────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ def create_thread(first_message: str = "") -> dict:
         "created_at": now,
         "updated_at": now,
         "context_window_size": DEFAULT_CONTEXT_WINDOW,
+        "summary_trigger": DEFAULT_SUMMARY_TRIGGER,
         "summary_cursor": 0,
         "summaries": [],
         "messages": [],
@@ -144,7 +146,9 @@ def get_llm_context(thread: dict) -> list["BaseMessage"]:
     older = messages[:-window]
     new_uncovered = older[thread["summary_cursor"]:]
 
-    if len(new_uncovered) >= window:
+    min_trigger = window + 5
+    trigger = max(thread.get("summary_trigger", DEFAULT_SUMMARY_TRIGGER), min_trigger)
+    if len(new_uncovered) >= trigger:
         update_summaries(thread, new_uncovered)
 
     merged = merge(thread["summaries"])

@@ -8,6 +8,27 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.5] — 2026-05-23
+
+### Changed
+- `app/components/thread_sidebar.py` — "Summary trigger" slider `min_value` is now dynamically `context_window + 5`; moving the context window slider auto-clamps the trigger if it would violate the rule
+- `memory/manager.py` — `get_llm_context()` enforces `trigger >= window + 5` as a hard floor, protecting threads saved before this rule existed
+
+## [0.3.4] — 2026-05-23
+
+### Added
+- `memory/manager.py` — `DEFAULT_SUMMARY_TRIGGER = 10` constant; stored as `summary_trigger` per thread so each thread can have its own threshold
+- `memory/manager.py` — `get_llm_context()` reads `thread["summary_trigger"]` instead of reusing the context window size
+- `app/components/thread_sidebar.py` — "Summary trigger" slider (1–50, default 10) below the context window slider; updates persist to disk per thread
+
+## [0.3.3] — 2026-05-23
+
+### Added
+- `agent/factory.py` — `stream_events()`: unified event generator yielding typed dicts (`token`, `tool_call`, `tool_result`, `response`) for live UI rendering; keeps factory UI-agnostic
+- `app/components/stream_handler.py` — live typing indicator ("▪ Thinking…") shown from the moment the agent starts until the first token arrives
+- `app/components/stream_handler.py` — live tool call status ("🔧 Calling `<tool>`…") replaces the typing indicator while a tool is executing; "▪ Thinking…" resumes while the LLM digests the tool result
+- `app/components/stream_handler.py` — token streaming with blinking `▌` cursor via `st.empty()` placeholder; cursor removed on completion
+
 ## [0.3.2] — 2026-05-23
 
 ### Fixed

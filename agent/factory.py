@@ -106,6 +106,47 @@ def stream_and_collect(
     return _gen(), snapshot
 
 
+def stream_events(
+    graph: "CompiledGraph",
+    messages: list[dict],
+    config: dict | None = None,
+) -> "Generator[dict, None, None]":
+    """
+    Yield unified event dicts for live UI rendering.
+
+    Event shapes:
+      {"type": "token",       "text": "..."}
+      {"type": "tool_call",   "tool": "...", "args": {...}, "call_id": "..."}
+      {"type": "tool_result", "content": "...", "call_id": "..."}
+      {"type": "response",    "content": "..."}
+
+    The caller decides how each event type is presented (spinner, status chip,
+    streamed text, etc.) so factory.py stays UI-agnostic.
+    """
+    from typing import Generator
+    from langchain_core.messages import AIMessageChunk
+
+    for item in graph.stream(
+        {"messages": messages}, config, stream_mode=["updates", "messages"]
+    ):
+        mode, payload = item
+        if mode == "updates":
+            for _node, state in payload.items():
+                for msg in state.get("messages", []):
+                    step = _parse_message_to_step(msg)
+                    if step:
+                        yield step
+        elif mode == "messages":
+            chunk, metadata = payload
+            if (
+                isinstance(chunk, AIMessageChunk)
+                and metadata.get("langgraph_node") == "agent"
+            ):
+                text = _extract_text(chunk.content)
+                if text:
+                    yield {"type": "token", "text": text}
+
+
 def _extract_text(content: Any) -> str:
     """Return plain text from a message content value (str or list of content blocks)."""
     if isinstance(content, str):

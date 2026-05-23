@@ -9,6 +9,7 @@ from __future__ import annotations
 import streamlit as st
 
 from memory.manager import (
+    DEFAULT_SUMMARY_TRIGGER,
     create_thread,
     delete_thread,
     get_context_label,
@@ -92,15 +93,33 @@ def _render_thread_list() -> None:
 
 
 def _render_context_slider() -> None:
-    """Render the context window slider (5–50, default 10) and dynamic label."""
+    """Render the context window + summary trigger sliders and dynamic label."""
     thread = st.session_state.get("active_thread")
     if thread is None:
         return
 
-    current = thread.get("context_window_size", 10)
-    new_size = st.slider("Context window", min_value=5, max_value=50, value=current, step=1)
-    if new_size != current:
-        thread["context_window_size"] = new_size
+    current_window = thread.get("context_window_size", 10)
+    new_window = st.slider("Context window", min_value=5, max_value=50, value=current_window, step=1)
+    if new_window != current_window:
+        thread["context_window_size"] = new_window
+        # Clamp summary_trigger so it stays at least context_window + 5
+        min_trigger = new_window + 5
+        if thread.get("summary_trigger", DEFAULT_SUMMARY_TRIGGER) < min_trigger:
+            thread["summary_trigger"] = min_trigger
+        save_thread(thread)
+
+    min_trigger = thread.get("context_window_size", 10) + 5
+    current_trigger = max(thread.get("summary_trigger", DEFAULT_SUMMARY_TRIGGER), min_trigger)
+    new_trigger = st.slider(
+        "Summary trigger",
+        min_value=min_trigger,
+        max_value=100,
+        value=current_trigger,
+        step=1,
+        help="Summarise when this many messages fall outside the context window (always ≥ context window + 5)",
+    )
+    if new_trigger != thread.get("summary_trigger"):
+        thread["summary_trigger"] = new_trigger
         save_thread(thread)
 
     st.caption(get_context_label(thread))
