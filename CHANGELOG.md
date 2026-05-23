@@ -12,7 +12,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 - Fixed `ValidationError` crash in `agent/local_llm.py` `_stream()`: replaced `AIMessage` with `AIMessageChunk` when yielding `ChatGenerationChunk`, satisfying LangChain's `BaseMessageChunk` type constraint
-- Updated LlamaGuard API endpoint in `guardrails/llamaguard.py` from decommissioned `api-inference.huggingface.co` to `router.huggingface.co/hf-inference` (legacy endpoint returned HTTP 410 and no longer resolves in DNS)
+- Replaced LlamaGuard (HF Inference API, decommissioned) with Claude Haiku (`claude-haiku-4-5-20251001`) as the content safety classifier in `guardrails/llamaguard.py`; uses Anthropic API with a structured S1–S13 system prompt, preserving the same `GuardResult` interface and response parsing
 
 ## [0.5.2] — 2026-05-24
 
