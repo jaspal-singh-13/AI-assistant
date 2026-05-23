@@ -137,6 +137,7 @@
 - [x] Row 2+3: cost per call line chart + cumulative cost area chart
 - [x] Row 4: stacked bar — input vs output tokens per call
 - [x] Row 5: safety log table — blocked calls, timestamp, category
+- [x] Readability overhaul — sidebar filters, global summary banner, per-model cards with badges, tabbed charts (Cost · Latency · Tokens · Tools), latency histogram, tool usage chart, safety log formatting, raw-log download
 
 ### tests/
 - [x] `tests/test_guardrails.py` — 10 tests passing

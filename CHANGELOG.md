@@ -8,6 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-05-23
+
+### Changed
+- `app/pages/02_observability.py` — full readability overhaul: sidebar with model filter, call-count slider and auto-refresh toggle; global summary banner (total calls, avg latency, total cost, block rate); per-model detail cards with frontier/OSS badge, full model names, and tool invocation count; charts reorganised into four tabs (Cost, Latency, Tokens, Tools); new latency-per-call line chart and latency distribution histogram; tool usage bar chart and per-model tool pivot table; safety log upgraded with warning banner, friendly column names, and datetime formatting; raw-log download button; micro-dollar cost formatter for sub-cent amounts
+
 ## [0.4.0] — 2026-05-23
 
 ### Added
