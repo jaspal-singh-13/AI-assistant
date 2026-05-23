@@ -73,12 +73,66 @@ def run_pending_response() -> None:
 
     from agent.factory import stream_events
     from agent.models import get_model
+    from guardrails.input_guard import CANNED_REFUSAL, message_hash, run_input_pipeline
+    from guardrails.output_guard import CANNED_OUTPUT_REFUSAL, run_output_pipeline
     from memory.manager import append_message, get_llm_context, list_threads
     from observability.logger import log_call
+    from observability.pricing import compute_cost, fetch_pricing
 
     config = get_model(model_key)
     lc_messages = get_llm_context(thread)
     msg_dicts = _lc_to_dicts(lc_messages)
+
+    # Fetch / reuse pricing (24hr cache in session state)
+    pricing_cache = st.session_state.get("pricing")
+    if pricing_cache is None:
+        pricing_data, pricing_source, pricing_fetched_at = fetch_pricing()
+        st.session_state["pricing"] = {
+            "data": pricing_data,
+            "source": pricing_source,
+            "fetched_at": pricing_fetched_at,
+        }
+    else:
+        pricing_data = pricing_cache["data"]
+        pricing_source = pricing_cache["source"]
+        pricing_fetched_at = pricing_cache["fetched_at"]
+
+    # Stage 0 — input guardrail check
+    user_text = thread["messages"][-1]["content"] if thread.get("messages") else ""
+    input_guard = run_input_pipeline(user_text)
+    if input_guard.blocked:
+        log_call(
+            model_id=config.model_id,
+            model_type=config.model_type,
+            input_tokens=0,
+            output_tokens=0,
+            input_cost_usd=0.0,
+            output_cost_usd=0.0,
+            latency_ms=input_guard.latency_ms,
+            pricing_source=pricing_source,
+            pricing_fetched_at=pricing_fetched_at,
+            guardrail_blocked=True,
+            block_layer="input",
+            block_reason=input_guard.reason,
+            block_stage="input_pipeline",
+            original_message_hash=message_hash(user_text),
+        )
+        with st.chat_message("assistant"):
+            st.warning(CANNED_REFUSAL)
+        assistant_dict = {
+            "role": "assistant",
+            "content": CANNED_REFUSAL,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "state_snapshot": [],
+            "metadata": {"model_label": config.model_label, "model_type": config.model_type,
+                         "latency_ms": round(input_guard.latency_ms, 2),
+                         "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+        }
+        append_message(thread, assistant_dict)
+        st.session_state["threads"] = list_threads()
+        st.session_state["pending_response"] = False
+        st.rerun()
+        return
 
     t_start = time.time()
     snapshot: list[dict] = []
@@ -127,16 +181,35 @@ def run_pending_response() -> None:
 
     latency_ms = (time.time() - t_start) * 1000
 
+    # Output guardrail check
+    output_guard = run_output_pipeline(full_response)
+    if output_guard.blocked:
+        full_response = CANNED_OUTPUT_REFUSAL
+
+    # Compute costs
+    input_cost, output_cost = compute_cost(
+        model_id=config.model_id,
+        input_tokens=0,
+        output_tokens=0,
+        pricing=pricing_data,
+        model_type=config.model_type,
+        latency_ms=latency_ms,
+    )
+
     log_call(
         model_id=config.model_id,
         model_type=config.model_type,
         input_tokens=0,
         output_tokens=0,
-        input_cost_usd=0.0,
-        output_cost_usd=0.0,
+        input_cost_usd=input_cost,
+        output_cost_usd=output_cost,
         latency_ms=latency_ms,
-        pricing_source="unavailable",
-        pricing_fetched_at="",
+        pricing_source=pricing_source,
+        pricing_fetched_at=pricing_fetched_at,
+        guardrail_blocked=output_guard.blocked,
+        block_layer="output" if output_guard.blocked else None,
+        block_reason=output_guard.reason if output_guard.blocked else None,
+        block_stage="output_pipeline" if output_guard.blocked else None,
         summary_used=bool(thread.get("summaries")),
         tool_calls=[s["tool"] for s in snapshot if s.get("type") == "tool_call"],
     )

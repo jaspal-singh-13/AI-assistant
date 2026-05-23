@@ -100,47 +100,49 @@
 
 ### observability/logger.py
 - [x] `log_call()`, `read_calls()` — full JSONL schema, file write — 6 tests passing
-- [ ] File lock for concurrent writes
+- [x] File lock for concurrent writes — filelock used, test passing
 
 ### observability/pricing.py
 - [x] `hours_since_fetch()` — 1 test passing
-- [ ] `fetch_pricing()` — GET LiteLLM JSON, 24hr cache in session state, fallback on error
-- [ ] `compute_cost()` — frontier: LiteLLM per-token prices; OSS: `(latency_ms/3_600_000) × $0.03`
+- [x] `fetch_pricing()` — GET LiteLLM JSON, 24hr cache in session state, fallback on error — 1 test passing
+- [x] `compute_cost()` — frontier: LiteLLM per-token prices; OSS: `(latency_ms/3_600_000) × $0.03` — 2 tests passing
 
 ### observability/langfuse_query.py
-- [ ] `get_langfuse_handler()` — return CallbackHandler or None if keys missing
-- [ ] `build_run_config()` — inject handler into LangGraph run config
+- [x] `get_langfuse_handler()` — return CallbackHandler or None if keys missing
+- [x] `build_run_config()` — inject handler into LangGraph run config
 
 ### guardrails/llamaguard.py
 - [x] `CATEGORY_MAP` (S1–S13) — 1 test passing
-- [ ] `classify(text, role)` — HF Inference API call, parse "safe"/"unsafe\nS{N}" response
+- [x] `classify(text, role)` — HF Inference API call, parse "safe"/"unsafe\nS{N}" response — 2 tests passing
 
 ### guardrails/input_guard.py
 - [x] `message_hash()` — SHA-256 helper — 1 test passing
-- [ ] `_check_rebuff()` — Rebuff prompt injection detection (~5ms)
-- [ ] `_detect_pii()` — Presidio entity detection (local, never blocks)
-- [ ] `run_input_pipeline()` — Rebuff → LlamaGuard 3 → Presidio, first block wins
+- [x] `_check_injection()` — heuristic regex injection detection (~1ms); rebuff==0.1.1 requires langchain<0.2 (incompatible)
+- [x] `_detect_pii()` — Presidio entity detection (local, never blocks) — 1 test passing
+- [x] `run_input_pipeline()` — injection check → LlamaGuard 3 → Presidio, first block wins — 2 tests passing
 
 ### guardrails/output_guard.py
-- [ ] `_check_guardrails_ai()` — ToxicLanguage + DetectPII + RestrictToTopic validators
-- [ ] `run_output_pipeline()` — Guardrails AI → LlamaGuard 3 re-check
+- [x] `_check_validators()` — ToxicLanguage + RestrictToTopic heuristic validators
+- [x] `run_output_pipeline()` — heuristic validators → LlamaGuard 3 re-check — 2 tests passing
 
 ### guardrails/validators.py
-- [ ] Implement `ToxicLanguage`, `DetectPII`, `RestrictToTopic` validator classes
+- [x] Implement `ToxicLanguage`, `DetectPII`, `RestrictToTopic` validator classes (heuristic, no broken dep)
 
 ### guardrails/nemo/
 - [x] `config.yml` and `rails.co` — 4 declarative rails written
 - [ ] End-to-end test that NeMo rails load and trigger correctly
 
 ### app/pages/02_observability.py
-- [ ] Row 1: metric cards — calls, avg latency, total cost, cost/1k per model
-- [ ] Row 2+3: cost per call line chart + cumulative cost area chart
-- [ ] Row 4: stacked bar — input vs output tokens per call
-- [ ] Row 5: safety log table — blocked calls, timestamp, category
+- [x] Row 1: metric cards — calls, avg latency, total cost, cost/1k per model
+- [x] Row 2+3: cost per call line chart + cumulative cost area chart
+- [x] Row 4: stacked bar — input vs output tokens per call
+- [x] Row 5: safety log table — blocked calls, timestamp, category
 
 ### tests/
-- [ ] `tests/test_guardrails.py` — unskip all tests as guardrails land
-- [ ] `tests/test_observability.py` — unskip pricing and cost tests
+- [x] `tests/test_guardrails.py` — 10 tests passing
+- [x] `tests/test_observability.py` — 10 tests passing (all pricing and cost tests green)
+
+> Gate met — 2026-05-23
 
 ---
 

@@ -137,12 +137,45 @@ class TestPricing:
 
     def test_oss_cost_never_na(self):
         """compute_cost for OSS model returns (0.0, positive_float), never (0, 0)."""
-        pytest.skip("Phase 3 — implement compute_cost first")
+        from observability.pricing import compute_cost
+        input_cost, output_cost = compute_cost(
+            model_id="qwen/qwen2.5-0.5b",
+            input_tokens=100,
+            output_tokens=50,
+            pricing={},
+            model_type="oss",
+            latency_ms=5000.0,
+        )
+        assert input_cost == 0.0
+        assert output_cost > 0.0
 
     def test_frontier_cost_uses_litellm_prices(self):
         """compute_cost for frontier model multiplies token counts by per-token prices."""
-        pytest.skip("Phase 3 — implement compute_cost frontier path first")
+        from observability.pricing import compute_cost
+        pricing = {
+            "claude-sonnet-4-20250514": {
+                "input_cost_per_token": 0.000003,
+                "output_cost_per_token": 0.000015,
+            }
+        }
+        input_cost, output_cost = compute_cost(
+            model_id="claude-sonnet-4-20250514",
+            input_tokens=1000,
+            output_tokens=500,
+            pricing=pricing,
+            model_type="frontier",
+        )
+        assert abs(input_cost - 0.003) < 1e-8
+        assert abs(output_cost - 0.0075) < 1e-8
 
     def test_fetch_pricing_falls_back_on_network_error(self):
         """fetch_pricing() returns fallback data when HTTP request fails."""
-        pytest.skip("Phase 3 — implement fetch_pricing first")
+        import requests
+        from unittest.mock import patch
+        from observability.pricing import fetch_pricing
+
+        with patch("requests.get", side_effect=requests.exceptions.ConnectionError):
+            data, source, fetched_at = fetch_pricing()
+        assert source == "fallback"
+        assert isinstance(data, dict)
+        assert len(fetched_at) > 0

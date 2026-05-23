@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 LITELLM_PRICING_URL = (
     "https://raw.githubusercontent.com/BerriAI/litellm/main/"
@@ -30,20 +29,18 @@ def fetch_pricing(force: bool = False) -> tuple[dict, str, str]:
 
     Tries the LiteLLM GitHub URL first; falls back to local JSON on any error.
     Result should be cached in st.session_state["pricing"] for 24hr (FR-OBS-02).
-
-    TODO (Phase 3): implement with requests + cache logic.
     """
-    # import requests
-    # try:
-    #     resp = requests.get(LITELLM_PRICING_URL, timeout=10)
-    #     resp.raise_for_status()
-    #     data = resp.json()
-    #     fetched_at = datetime.now(timezone.utc).isoformat()
-    #     return data, "litellm_json", fetched_at
-    # except Exception:
-    #     pass
-    # return _load_fallback()
-    raise NotImplementedError("Phase 3 — fetch_pricing")
+    import requests
+
+    try:
+        resp = requests.get(LITELLM_PRICING_URL, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        fetched_at = datetime.now(timezone.utc).isoformat()
+        return data, "litellm_json", fetched_at
+    except Exception:
+        pass
+    return _load_fallback()
 
 
 def _load_fallback() -> tuple[dict, str, str]:
@@ -65,19 +62,15 @@ def compute_cost(
 
     For 'frontier': uses LiteLLM pricing JSON.
     For 'oss': returns equivalent compute cost (never NA — FR-OBS-04).
-
-    TODO (Phase 3): implement lookup.
     """
     if model_type == "oss":
         equiv = (latency_ms / 3_600_000) * HF_SPACES_CPU_HOURLY_USD
         return 0.0, equiv
 
-    # TODO: look up model_id in pricing dict, extract input_cost_per_token + output_cost_per_token
-    # entry = pricing.get(model_id, {})
-    # input_price = entry.get("input_cost_per_token", 0.0)
-    # output_price = entry.get("output_cost_per_token", 0.0)
-    # return input_tokens * input_price, output_tokens * output_price
-    raise NotImplementedError("Phase 3 — compute_cost frontier")
+    entry = pricing.get(model_id, {})
+    input_price = entry.get("input_cost_per_token", 0.0)
+    output_price = entry.get("output_cost_per_token", 0.0)
+    return input_tokens * input_price, output_tokens * output_price
 
 
 def hours_since_fetch(fetched_at_iso: str) -> float:

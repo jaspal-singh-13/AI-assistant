@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from filelock import FileLock
+
 LOGS_DIR = Path(__file__).parent.parent / "logs"
 CALLS_LOG = LOGS_DIR / "calls.jsonl"
 
@@ -80,9 +82,10 @@ def log_call(
         "tool_calls": tool_calls or [],
     }
 
-    # TODO (Phase 3): acquire a file lock for concurrent writes
-    with CALLS_LOG.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    lock = FileLock(str(CALLS_LOG) + ".lock")
+    with lock:
+        with CALLS_LOG.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
 def read_calls(model_id: str | None = None) -> list[dict]:

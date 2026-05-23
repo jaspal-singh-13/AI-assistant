@@ -8,6 +8,26 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-23
+
+### Added
+- `guardrails/llamaguard.py` — `classify()`: LlamaGuard 3 via HF Inference API; gracefully skips if `HUGGINGFACE_TOKEN` is absent
+- `guardrails/input_guard.py` — `run_input_pipeline()`: 3-stage pipeline — heuristic injection detection → LlamaGuard 3 → Presidio PII (never blocks); replaces rebuff (incompatible with langchain>=0.3)
+- `guardrails/input_guard.py` — `_check_injection()`: regex-based prompt injection detection (~1ms, no model call)
+- `guardrails/input_guard.py` — `_detect_pii()`: Presidio `AnalyzerEngine` for local PII entity detection
+- `guardrails/output_guard.py` — `run_output_pipeline()`: heuristic validators → LlamaGuard 3 re-check on output
+- `guardrails/validators.py` — `ToxicLanguage`, `DetectPII`, `RestrictToTopic` heuristic validator classes
+- `observability/pricing.py` — `fetch_pricing()`: GET LiteLLM pricing JSON with fallback to `config/pricing_fallback.json`
+- `observability/pricing.py` — `compute_cost()`: frontier per-token cost from LiteLLM; OSS equivalent compute cost (never NA)
+- `observability/logger.py` — `FileLock` for concurrent-safe JSONL writes
+- `observability/langfuse_query.py` — `get_langfuse_handler()` and `build_run_config()` fully implemented
+- `app/pages/02_observability.py` — full 5-row dashboard: metric cards, cost charts, token bar, safety log
+- `app/components/stream_handler.py` — input guardrail wired before agent call; output guardrail wired after response; pricing fetched and logged per call
+
+### Changed
+- `requirements.txt` — added `presidio-analyzer`, `presidio-anonymizer`, `filelock`; removed `rebuff` (incompatible) and `guardrails-ai` (broken PyPI dep chain)
+- uv virtualenv created at `.venv` with Python 3.12; `en_core_web_lg` spacy model installed for Presidio
+
 ## [0.3.5] — 2026-05-23
 
 ### Changed

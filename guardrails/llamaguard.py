@@ -59,24 +59,34 @@ def classify(text: str, role: str = "user") -> GuardResult:
     Call LlamaGuard 3 via HF Inference API and return a GuardResult.
 
     role: "user" for input check, "assistant" for output check.
-
-    TODO (Phase 3): implement HF Inference API call.
+    Returns GuardResult(blocked=False) gracefully if HF token is missing.
     """
-    # import requests
-    # HF_TOKEN = os.environ.get("HUGGINGFACE_TOKEN", "")
-    # API_URL = "https://api-inference.huggingface.co/models/meta-llama/LlamaGuard-3-8B"
-    # headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-    #
-    # prompt = _LLAMAGUARD_PROMPT_TEMPLATE.format(role=role, text=text)
-    # t0 = time.perf_counter()
-    # resp = requests.post(API_URL, headers=headers, json={"inputs": prompt}, timeout=15)
-    # latency_ms = (time.perf_counter() - t0) * 1000
-    #
-    # result_text = resp.json()[0]["generated_text"].strip().lower()
-    # if result_text.startswith("unsafe"):
-    #     parts = result_text.split("\n")
-    #     code = parts[1].strip().upper() if len(parts) > 1 else "UNKNOWN"
-    #     category = CATEGORY_MAP.get(code, code)
-    #     return GuardResult(blocked=True, reason=f"{code}_{'_'.join(category.split())}", category=category, latency_ms=latency_ms)
-    # return GuardResult(blocked=False, latency_ms=latency_ms)
-    raise NotImplementedError("Phase 3 — classify")
+    import requests
+
+    hf_token = os.environ.get("HUGGINGFACE_TOKEN", "")
+    if not hf_token:
+        return GuardResult(blocked=False, reason="llamaguard_skipped_no_token")
+
+    api_url = "https://api-inference.huggingface.co/models/meta-llama/LlamaGuard-3-8B"
+    headers = {"Authorization": f"Bearer {hf_token}"}
+    prompt = _LLAMAGUARD_PROMPT_TEMPLATE.format(role=role, text=text)
+
+    t0 = time.perf_counter()
+    try:
+        resp = requests.post(api_url, headers=headers, json={"inputs": prompt}, timeout=15)
+        resp.raise_for_status()
+        result_text = resp.json()[0]["generated_text"].strip().lower()
+    except Exception:
+        return GuardResult(blocked=False, reason="llamaguard_error")
+    latency_ms = (time.perf_counter() - t0) * 1000
+
+    if result_text.startswith("unsafe"):
+        parts = result_text.split("\n")
+        raw_code = parts[1].strip().upper() if len(parts) > 1 else "UNKNOWN"
+        # The response may return comma-separated codes; take the first
+        code = raw_code.split(",")[0].strip()
+        category = CATEGORY_MAP.get(code, code)
+        reason = f"{code}_{'_'.join(category.split())}"
+        return GuardResult(blocked=True, reason=reason, category=category, latency_ms=latency_ms)
+
+    return GuardResult(blocked=False, latency_ms=latency_ms)

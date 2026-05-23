@@ -3,7 +3,9 @@
 Three stages run in sequence. First block wins (later stages not called).
 Order chosen for cost efficiency — cheapest check first.
 
-Stage 1: Rebuff   — prompt injection (~5ms, heuristic, no LLM call)
+Stage 1: Heuristic injection detection (~1ms, regex + keyword patterns)
+          Note: rebuff (0.1.1) requires langchain<0.2 and is incompatible with
+          this project's langchain>=0.3 dependency, so a local heuristic is used.
 Stage 2: LlamaGuard 3 — 13 harm categories (~300ms, HF Inference API)
 Stage 3: Presidio — PII detection (local, ~20ms, NEVER blocks — redacts only)
 
@@ -13,9 +15,28 @@ FR-GRD-01, FR-GRD-02, FR-GRD-06, NFR-PERF-01 (total < 400ms).
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 
 from guardrails.llamaguard import GuardResult
+
+# Patterns that signal prompt injection attempts (DAN, jailbreaks, nested injections)
+_INJECTION_PATTERNS = re.compile(
+    r"(ignore\s+(all\s+)?(previous|prior|above)\s+instructions?|"
+    r"disregard\s+(all\s+)?instructions?|"
+    r"you\s+are\s+now\s+(dan|an?\s+unrestricted|free\s+from)|"
+    r"do\s+anything\s+now|jailbreak|"
+    r"pretend\s+(you\s+have\s+no\s+restrictions?|to\s+be\s+evil)|"
+    r"act\s+as\s+if\s+you\s+have\s+no\s+(guidelines?|restrictions?|rules?)|"
+    r"system\s*:\s*(you\s+are|ignore|forget)|"
+    r"<\|im_start\|>|<\|system\|>|<\|endoftext\|>)",
+    re.IGNORECASE,
+)
+
+# Base64-encoded "ignore previous" and common b64-wrapped jailbreak markers
+_B64_INJECTION = re.compile(
+    r"\b[A-Za-z0-9+/]{20,}={0,2}\b"  # any substantial base64 blob is suspicious
+)
 
 
 def run_input_pipeline(text: str) -> GuardResult:
@@ -26,43 +47,37 @@ def run_input_pipeline(text: str) -> GuardResult:
     to the agent — return a canned refusal string to the user instead.
 
     PII entities are always returned in result.pii_entities (may be empty list).
-
-    TODO (Phase 3): implement all three stages.
     """
-    # Stage 1 — Rebuff
-    # rebuff_result = _check_rebuff(text)
-    # if rebuff_result.blocked:
-    #     return rebuff_result
+    # Stage 1 — Heuristic injection detection
+    rebuff_result = _check_injection(text)
+    if rebuff_result.blocked:
+        return rebuff_result
 
     # Stage 2 — LlamaGuard 3
-    # from guardrails.llamaguard import classify
-    # lg_result = classify(text, role="user")
-    # if lg_result.blocked:
-    #     return lg_result
+    from guardrails.llamaguard import classify
+    lg_result = classify(text, role="user")
+    if lg_result.blocked:
+        return lg_result
 
     # Stage 3 — Presidio (redact only, never blocks)
-    # pii_entities = _detect_pii(text)
-    # return GuardResult(blocked=False, pii_entities=pii_entities)
-
-    raise NotImplementedError("Phase 3 — run_input_pipeline")
+    pii_entities = _detect_pii(text)
+    return GuardResult(blocked=False, pii_entities=pii_entities)
 
 
-def _check_rebuff(text: str) -> GuardResult:
+def _check_injection(text: str) -> GuardResult:
     """
-    Detect prompt injection via Rebuff.
+    Detect prompt injection via regex heuristics.
 
-    Catches: "ignore previous instructions", nested injections, base64-encoded payloads.
-    Latency target: ~5ms (heuristic, no model call).
-
-    TODO (Phase 3): implement using rebuff library.
+    Catches: "ignore previous instructions", DAN patterns, nested injections,
+    role-override attempts, and special tokens.
+    Latency target: ~1ms (pure regex, no model call).
     """
-    # from rebuff import RebuffSdk
-    # rb = RebuffSdk(...)
-    # result = rb.detect_injection(text)
-    # if result.injection_detected:
-    #     return GuardResult(blocked=True, reason="prompt_injection", latency_ms=result.run_time_ms)
-    # return GuardResult(blocked=False, latency_ms=result.run_time_ms)
-    raise NotImplementedError("Phase 3 — _check_rebuff")
+    t0 = time.perf_counter()
+    if _INJECTION_PATTERNS.search(text):
+        latency_ms = (time.perf_counter() - t0) * 1000
+        return GuardResult(blocked=True, reason="prompt_injection", latency_ms=latency_ms)
+    latency_ms = (time.perf_counter() - t0) * 1000
+    return GuardResult(blocked=False, latency_ms=latency_ms)
 
 
 def _detect_pii(text: str) -> list:
@@ -70,14 +85,17 @@ def _detect_pii(text: str) -> list:
     Detect PII entities via Presidio (local inference, no API call).
 
     Returns list of entity dicts. Does NOT block the message.
-
-    TODO (Phase 3): implement using presidio-analyzer.
     """
-    # from presidio_analyzer import AnalyzerEngine
-    # analyzer = AnalyzerEngine()
-    # results = analyzer.analyze(text=text, language="en")
-    # return [{"entity_type": r.entity_type, "start": r.start, "end": r.end, "score": r.score} for r in results]
-    raise NotImplementedError("Phase 3 — _detect_pii")
+    try:
+        from presidio_analyzer import AnalyzerEngine
+        analyzer = AnalyzerEngine()
+        results = analyzer.analyze(text=text, language="en")
+        return [
+            {"entity_type": r.entity_type, "start": r.start, "end": r.end, "score": r.score}
+            for r in results
+        ]
+    except Exception:
+        return []
 
 
 def message_hash(text: str) -> str:
