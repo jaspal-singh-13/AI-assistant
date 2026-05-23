@@ -19,6 +19,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
 
+from observability.logger import get_logger
+
+logger = get_logger(__name__)
+
 MEMORY_DIR = Path(__file__).parent
 INDEX_PATH = MEMORY_DIR / "index.json"
 THREADS_DIR = MEMORY_DIR / "threads"
@@ -73,12 +77,14 @@ def create_thread(first_message: str = "") -> dict:
         "message_count": 0,
     })
     _save_index(index)
+    logger.debug("create_thread | id=%s title=%r", thread_id, title)
     return thread
 
 
 def load_thread(thread_id: str) -> dict:
     """Load and return a thread dict from disk. Raises FileNotFoundError if missing."""
     path = THREADS_DIR / f"{thread_id}.json"
+    logger.debug("load_thread | id=%s", thread_id)
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -86,13 +92,18 @@ def save_thread(thread: dict) -> None:
     """Persist a thread dict to disk and sync message_count + updated_at in index.json."""
     thread["updated_at"] = datetime.now(timezone.utc).isoformat()
     path = THREADS_DIR / f"{thread['id']}.json"
-    path.write_text(json.dumps(thread, indent=2, ensure_ascii=False), encoding="utf-8")
+    try:
+        path.write_text(json.dumps(thread, indent=2, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        logger.warning("save_thread | disk write failed | id=%s path=%s", thread["id"], path, exc_info=True)
+        raise
     index = _load_index()
     for entry in index["threads"]:
         if entry["id"] == thread["id"]:
             entry["updated_at"] = thread["updated_at"]
             entry["message_count"] = len(thread["messages"])
     _save_index(index)
+    logger.debug("save_thread | id=%s msg_count=%d", thread["id"], len(thread["messages"]))
 
 
 def list_threads() -> list[dict]:
@@ -112,6 +123,7 @@ def delete_thread(thread_id: str) -> None:
     index = _load_index()
     index["threads"] = [t for t in index["threads"] if t["id"] != thread_id]
     _save_index(index)
+    logger.debug("delete_thread | id=%s", thread_id)
 
 
 def rename_thread(thread: dict, new_title: str) -> None:
@@ -146,9 +158,15 @@ def get_llm_context(thread: dict) -> list["BaseMessage"]:
     older = messages[:-window]
     new_uncovered = older[thread["summary_cursor"]:]
 
+    logger.debug(
+        "get_llm_context | window=%d total=%d recent=%d summary_cursor=%d",
+        window, len(messages), len(recent), thread["summary_cursor"],
+    )
+
     min_trigger = window + 5
     trigger = max(thread.get("summary_trigger", DEFAULT_SUMMARY_TRIGGER), min_trigger)
     if len(new_uncovered) >= trigger:
+        logger.info("get_llm_context | summarisation triggered | uncovered=%d", len(new_uncovered))
         update_summaries(thread, new_uncovered)
 
     merged = merge(thread["summaries"])

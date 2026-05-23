@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -108,12 +109,22 @@ class ComparativeResult:
         return "tie"
 
 
+# ── Shared Anthropic client ────────────────────────────────────────────────────
+
+def _get_client():
+    """Return a module-level shared Anthropic client (created once per process)."""
+    if _get_client._instance is None:
+        from anthropic import Anthropic
+        _get_client._instance = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    return _get_client._instance
+
+_get_client._instance = None  # type: ignore[attr-defined]
+
+
 # ── Judge functions ────────────────────────────────────────────────────────────
 
 def judge_absolute(response: str, prompt: dict, config: JudgeConfig) -> AbsoluteResult:
     """Score a single response in isolation with CoT rubric (FR-EVL-05b/c/d)."""
-    from anthropic import Anthropic
-
     category: PromptCategory = prompt.get("category", "factual")  # type: ignore[assignment]
     dimension = _primary_dimension(category)
     rubric = get_rubric(category, dimension)
@@ -129,7 +140,7 @@ def judge_absolute(response: str, prompt: dict, config: JudgeConfig) -> Absolute
         f"Rubric:\n{rubric}"
     )
 
-    client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    client = _get_client()
     msg = client.messages.create(
         model=config.model,
         max_tokens=512,
@@ -165,27 +176,19 @@ def judge_comparative(
     category: PromptCategory = prompt.get("category", "factual")  # type: ignore[assignment]
     dimension = _primary_dimension(category)
 
-    result_normal = _single_comparative_call(
-        first_response=response_a,
-        second_response=response_b,
-        first_label=model_a_id,
-        second_label=model_b_id,
-        prompt=prompt,
-        config=config,
-        dimension=dimension,
-        swap_run=False,
-    )
-
-    result_swapped = _single_comparative_call(
-        first_response=response_b,
-        second_response=response_a,
-        first_label=model_b_id,
-        second_label=model_a_id,
-        prompt=prompt,
-        config=config,
-        dimension=dimension,
-        swap_run=True,
-    )
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fut_normal = ex.submit(
+            _single_comparative_call,
+            response_a, response_b, model_a_id, model_b_id,
+            prompt, config, dimension, False,
+        )
+        fut_swapped = ex.submit(
+            _single_comparative_call,
+            response_b, response_a, model_b_id, model_a_id,
+            prompt, config, dimension, True,
+        )
+    result_normal = fut_normal.result()
+    result_swapped = fut_swapped.result()
 
     # Scores from normal run (a vs b)
     a_score_normal = result_normal["first_score"]
@@ -233,8 +236,6 @@ def _single_comparative_call(
     swap_run: bool,
 ) -> dict:
     """Run one judge call comparing two responses; returns raw score dict."""
-    from anthropic import Anthropic
-
     category: PromptCategory = prompt.get("category", "factual")  # type: ignore[assignment]
     rubric = get_rubric(category, dimension)  # type: ignore[arg-type]
 
@@ -253,7 +254,7 @@ def _single_comparative_call(
         '"response_b": {"score": N, "claims": [...], "reasoning": "..."}}'
     )
 
-    client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    client = _get_client()
     msg = client.messages.create(
         model=config.model,
         max_tokens=1024,

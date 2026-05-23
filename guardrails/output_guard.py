@@ -12,6 +12,9 @@ Stage 1 uses the project's own heuristic validators instead.
 from __future__ import annotations
 
 from guardrails.llamaguard import GuardResult
+from observability.logger import get_logger, log_duration
+
+logger = get_logger(__name__)
 
 CANNED_OUTPUT_REFUSAL = (
     "I'm sorry, I can't provide that response. "
@@ -27,12 +30,14 @@ def run_output_pipeline(response_text: str) -> GuardResult:
     result.stages contains per-stage breakdown for UI display.
     """
     import time
+    logger.info("output_pipeline | start | text_len=%d", len(response_text))
     stages: list[dict] = []
 
     # Stage 1 — heuristic validators
-    t0 = time.perf_counter()
-    guard_result = _check_validators(response_text)
-    val_latency = (time.perf_counter() - t0) * 1000
+    with log_duration(logger, "output_pipeline.validators"):
+        t0 = time.perf_counter()
+        guard_result = _check_validators(response_text)
+        val_latency = (time.perf_counter() - t0) * 1000
     stages.append({
         "name": "Heuristic validators",
         "passed": not guard_result.blocked,
@@ -40,12 +45,14 @@ def run_output_pipeline(response_text: str) -> GuardResult:
         "detail": guard_result.reason if guard_result.blocked else None,
     })
     if guard_result.blocked:
+        logger.warning("output_pipeline | BLOCKED | stage=validators reason=%s", guard_result.reason)
         guard_result.stages = stages
         return guard_result
 
     # Stage 2 — LlamaGuard 3 re-check on output
     from guardrails.llamaguard import classify
-    lg_result = classify(response_text, role="assistant")
+    with log_duration(logger, "output_pipeline.llamaguard"):
+        lg_result = classify(response_text, role="assistant")
     _SKIP_REASONS = {"llamaguard_skipped_no_token", "llamaguard_error"}
     lg_skipped = lg_result.reason in _SKIP_REASONS
     stages.append({
@@ -61,10 +68,12 @@ def run_output_pipeline(response_text: str) -> GuardResult:
         ),
     })
     if lg_result.blocked:
+        logger.warning("output_pipeline | BLOCKED | stage=llamaguard category=%s", lg_result.category)
         lg_result.stages = stages
         return lg_result
 
     total_latency = sum(s["latency_ms"] for s in stages)
+    logger.info("output_pipeline | PASSED")
     return GuardResult(blocked=False, latency_ms=total_latency, stages=stages)
 
 

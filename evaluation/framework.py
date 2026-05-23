@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import csv
 import json
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +31,11 @@ from typing import Any
 
 RESULTS_DIR = Path(__file__).parent / "results"
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+
+# Module-level cache: model key → (llm, compiled_graph)
+# Built once on first use and reused across all prompts.
+_agent_cache: dict[str, tuple] = {}
+_agent_cache_lock = threading.Lock()
 
 
 @dataclass
@@ -71,35 +78,54 @@ class EvalFramework:
 
         return prompts
 
-    def run_both_models(self, prompt: dict) -> tuple[dict, dict]:
+    def run_both_models(self, prompt: dict, qwen_lock: "threading.Lock | None" = None) -> tuple[dict, dict]:
         """
-        Run both models on a single prompt dict.
+        Run both models on a single prompt dict concurrently.
         Returns (claude_result, qwen_result) where each result contains:
           {model_id, response_text, input_tokens, output_tokens, latency_ms}
+
+        qwen_lock: optional Lock to serialise local (OSS) model inference
+        across prompt-level workers, preventing concurrent GPU access.
         """
         from agent.models import build_llm, list_models
         from agent.factory import create_agent, run_agent
         from tools.registry import get_tools
 
         tools = get_tools()
-        results = []
 
-        for key, config in list_models():
-            llm = build_llm(key)
-            graph = create_agent(llm, tools)
+        def _run_one(key: str) -> dict:
+            from agent.models import get_model
+            config = get_model(key)
+            with _agent_cache_lock:
+                if key not in _agent_cache:
+                    llm = build_llm(key)
+                    _agent_cache[key] = (llm, create_agent(llm, tools))
+                llm, graph = _agent_cache[key]
+
             messages = [{"role": "user", "content": prompt.get("prompt", "")}]
 
-            t0 = time.monotonic()
-            response_text, _ = run_agent(graph, messages)
-            latency_ms = int((time.monotonic() - t0) * 1000)
+            if config.model_type == "oss" and qwen_lock is not None:
+                with qwen_lock:
+                    t0 = time.monotonic()
+                    response_text, _ = run_agent(graph, messages)
+                    latency_ms = int((time.monotonic() - t0) * 1000)
+            else:
+                t0 = time.monotonic()
+                response_text, _ = run_agent(graph, messages)
+                latency_ms = int((time.monotonic() - t0) * 1000)
 
-            results.append({
+            return {
                 "model_id": key,
                 "response_text": response_text,
-                "input_tokens": 0,   # token counts not tracked at this layer
+                "input_tokens": 0,
                 "output_tokens": 0,
                 "latency_ms": latency_ms,
-            })
+            }
+
+        model_keys = [key for key, _ in list_models()]
+        with ThreadPoolExecutor(max_workers=len(model_keys)) as ex:
+            futs = {key: ex.submit(_run_one, key) for key in model_keys}
+        results = [futs[key].result() for key in model_keys]
 
         # Ensure exactly two results; pad with empty if a model is not configured
         while len(results) < 2:

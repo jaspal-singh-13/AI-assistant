@@ -8,6 +8,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-24
+
+### Added
+- Implemented application logger in `observability/logger.py`: `configure_logging()` (rotating file + stderr handlers, idempotent), `get_logger()` (named logger factory), and `log_duration()` (context manager for elapsed-time tracing with automatic exception logging)
+- Wired `get_logger(__name__)` into `agent/factory.py`, `guardrails/input_guard.py`, `guardrails/output_guard.py`, `guardrails/llamaguard.py`, `memory/manager.py`, and `app/components/stream_handler.py` — INFO/WARNING/ERROR/DEBUG calls cover all major code paths
+- Added `configure_logging()` call at Streamlit startup in `app/streamlit_app.py` (respects `LOG_LEVEL` env var, defaults to `INFO`)
+- Added `TestAppLogger` class (4 tests) to `tests/test_observability.py` covering handler installation, idempotency, elapsed-time logging, and exception tracing
+
+## [0.5.4] — 2026-05-24
+
+### Changed
+- Parallelized evaluation pipeline for ~3–4x speedup: concurrent position-swap judge calls in `llm_judge.py` (ThreadPoolExecutor), concurrent Claude+Qwen model runs per prompt in `framework.py`, concurrent DeepEval metric calls in `deepeval_metrics.py`, and concurrent prompt processing in `run_eval.py` with a new `--workers N` flag (default 3)
+- Moved Anthropic client construction to a module-level singleton in `llm_judge.py` to avoid per-call instantiation
+- Added agent/LLM object cache in `framework.py` to avoid rebuilding graphs on every prompt
+- Added `threading.Lock` guards in `run_eval.py` for shared `all_scores`/`comparatives` lists and cache writes; added `qwen_lock` to serialise local OSS model inference across workers
+
 ## [0.5.3] — 2026-05-24
 
 ### Fixed

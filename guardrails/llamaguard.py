@@ -11,6 +11,10 @@ import os
 import time
 from dataclasses import dataclass, field
 
+from observability.logger import get_logger
+
+logger = get_logger(__name__)
+
 _GUARD_MODEL = "claude-haiku-4-5-20251001"
 
 _SYSTEM_PROMPT = """You are a content safety classifier. Classify the given text across these harm categories:
@@ -97,8 +101,7 @@ def classify(text: str, role: str = "user") -> GuardResult:
         )
         result_text = msg.content[0].text.strip().lower()
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("Safety classifier error: %s", exc)
+        logger.warning("Safety classifier error: %s", exc)
         return GuardResult(blocked=False, reason="guard_error")
     latency_ms = (time.perf_counter() - t0) * 1000
 
@@ -108,6 +111,8 @@ def classify(text: str, role: str = "user") -> GuardResult:
         code = raw_code.split(",")[0].strip()
         category = CATEGORY_MAP.get(code, code)
         reason = f"{code}_{'_'.join(category.split())}"
+        logger.info("classify | UNSAFE | role=%s category=%s latency_ms=%.0f", role, category, latency_ms)
         return GuardResult(blocked=True, reason=reason, category=category, latency_ms=latency_ms)
 
+    logger.info("classify | safe | role=%s latency_ms=%.0f", role, latency_ms)
     return GuardResult(blocked=False, latency_ms=latency_ms)

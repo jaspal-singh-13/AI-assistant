@@ -17,6 +17,10 @@ import streamlit as st
 if TYPE_CHECKING:
     from langgraph.graph.graph import CompiledGraph
 
+from observability.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 def handle_send(user_message: str) -> None:
     """
@@ -67,6 +71,7 @@ def run_pending_response() -> None:
     graph = st.session_state.get("agent_graph")
 
     if graph is None:
+        logger.error("run_pending_response | agent graph is None — check API keys")
         st.error("Agent failed to initialise — check your API keys in .env and restart.")
         st.session_state["pending_response"] = False
         return
@@ -97,6 +102,11 @@ def run_pending_response() -> None:
         pricing_source = pricing_cache["source"]
         pricing_fetched_at = pricing_cache["fetched_at"]
 
+    logger.info(
+        "run_pending_response | start | model=%s thread=%s",
+        model_key, thread.get("id", "?"),
+    )
+
     # Stage 0 — input guardrail check
     user_text = thread["messages"][-1]["content"] if thread.get("messages") else ""
     input_guard = run_input_pipeline(user_text)
@@ -116,6 +126,10 @@ def run_pending_response() -> None:
             block_reason=input_guard.reason,
             block_stage="input_pipeline",
             original_message_hash=message_hash(user_text),
+        )
+        logger.info(
+            "run_pending_response | input BLOCKED | reason=%s model=%s",
+            input_guard.reason, model_key,
         )
         with st.chat_message("assistant"):
             st.warning(CANNED_REFUSAL)
@@ -152,40 +166,48 @@ def run_pending_response() -> None:
     full_response = ""
     tokens_started = False
 
+    logger.info("run_pending_response | streaming agent | model=%s", model_key)
     with st.chat_message("assistant"):
         status = st.empty()
         response_area = st.empty()
 
         status.markdown(_THINKING_HTML, unsafe_allow_html=True)
 
-        for event in stream_events(graph, msg_dicts):
-            etype = event.get("type")
+        try:
+            for event in stream_events(graph, msg_dicts):
+                etype = event.get("type")
 
-            if etype == "tool_call":
-                snapshot.append(event)
-                tool = event.get("tool", "tool")
-                status.markdown(
-                    f"<span style='color:#888;font-style:italic'>"
-                    f"🔧 Calling <code>{tool}</code>…</span>",
-                    unsafe_allow_html=True,
-                )
+                if etype == "tool_call":
+                    snapshot.append(event)
+                    tool = event.get("tool", "tool")
+                    logger.debug("stream | tool_call | tool=%s", tool)
+                    status.markdown(
+                        f"<span style='color:#888;font-style:italic'>"
+                        f"🔧 Calling <code>{tool}</code>…</span>",
+                        unsafe_allow_html=True,
+                    )
 
-            elif etype == "tool_result":
-                snapshot.append(event)
-                # Resume "Thinking…" while the LLM digests the result
-                status.markdown(_THINKING_HTML, unsafe_allow_html=True)
+                elif etype == "tool_result":
+                    snapshot.append(event)
+                    status.markdown(_THINKING_HTML, unsafe_allow_html=True)
 
-            elif etype == "token":
-                if not tokens_started:
-                    status.empty()
-                    tokens_started = True
-                full_response += event["text"]
-                response_area.markdown(full_response + "▌")
+                elif etype == "token":
+                    if not tokens_started:
+                        status.empty()
+                        tokens_started = True
+                    full_response += event["text"]
+                    response_area.markdown(full_response + "▌")
 
-            elif etype == "response":
-                snapshot.append(event)
-                if not full_response:
-                    full_response = event.get("content", "")
+                elif etype == "response":
+                    snapshot.append(event)
+                    if not full_response:
+                        full_response = event.get("content", "")
+
+        except Exception:
+            logger.error(
+                "run_pending_response | stream failed | model=%s", model_key, exc_info=True
+            )
+            raise
 
         # Remove the blinking cursor once streaming finishes
         status.empty()
@@ -193,10 +215,15 @@ def run_pending_response() -> None:
             response_area.markdown(full_response)
 
     latency_ms = (time.time() - t_start) * 1000
+    logger.info(
+        "run_pending_response | stream done | model=%s latency_ms=%.0f",
+        model_key, latency_ms,
+    )
 
     # Output guardrail check
     output_guard = run_output_pipeline(full_response)
     if output_guard.blocked:
+        logger.info("run_pending_response | output BLOCKED | reason=%s", output_guard.reason)
         full_response = CANNED_OUTPUT_REFUSAL
 
     # Compute costs

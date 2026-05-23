@@ -18,6 +18,10 @@ from dotenv import load_dotenv
 load_dotenv()  # must run before any langchain/anthropic imports read env vars
 
 import logging
+import os
+
+from observability.logger import configure_logging
+configure_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 logging.getLogger("transformers").setLevel(logging.ERROR)
 
 import nest_asyncio

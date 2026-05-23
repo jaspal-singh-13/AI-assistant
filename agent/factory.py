@@ -21,6 +21,10 @@ if TYPE_CHECKING:
 import nest_asyncio
 nest_asyncio.apply()  # enables async streaming from within Streamlit's event loop
 
+from observability.logger import get_logger, log_duration
+
+logger = get_logger(__name__)
+
 
 def create_agent(llm: "BaseChatModel", tools: list["BaseTool"]) -> "CompiledGraph":
     """
@@ -47,18 +51,29 @@ def run_agent(
 
     Returns (final_response, state_snapshot).
     """
+    model_id = (config or {}).get("model_id", "unknown")
+    thread_id = (config or {}).get("configurable", {}).get("thread_id", "?")
+    logger.info("run_agent | start | model=%s thread=%s msgs=%d", model_id, thread_id, len(messages))
+    t0 = time.perf_counter()
+
     steps: list[dict] = []
     final_response = ""
 
-    for chunk in graph.stream({"messages": messages}, config, stream_mode="updates"):
-        for node_name, state in chunk.items():
-            for msg in state.get("messages", []):
-                step = _parse_message_to_step(msg)
-                if step:
-                    steps.append(step)
-                    if step["type"] == "response":
-                        final_response = step["content"]
+    try:
+        for chunk in graph.stream({"messages": messages}, config, stream_mode="updates"):
+            for node_name, state in chunk.items():
+                for msg in state.get("messages", []):
+                    step = _parse_message_to_step(msg)
+                    if step:
+                        steps.append(step)
+                        if step["type"] == "response":
+                            final_response = step["content"]
+    except Exception:
+        logger.error("run_agent | failed | model=%s", model_id, exc_info=True)
+        raise
 
+    elapsed = (time.perf_counter() - t0) * 1000
+    logger.info("run_agent | done | model=%s elapsed_ms=%.0f steps=%d", model_id, elapsed, len(steps))
     return final_response, steps
 
 
@@ -83,6 +98,7 @@ def stream_and_collect(
 
     def _gen() -> "Generator[str, None, None]":
         from langchain_core.messages import AIMessageChunk
+        logger.debug("stream_and_collect | generator started")
         for item in graph.stream(
             {"messages": messages}, config, stream_mode=["updates", "messages"]
         ):
@@ -171,9 +187,12 @@ def _parse_message_to_step(msg: Any) -> dict | None:
     """
     from langchain_core.messages import AIMessage, ToolMessage
 
+    logger.debug("parse_step | type=%s", type(msg).__name__)
+
     if isinstance(msg, AIMessage):
         if msg.tool_calls:
             tc = msg.tool_calls[0]
+            logger.debug("parse_step | tool_call | name=%s call_id=%s", tc["name"], tc["id"])
             return {
                 "type": "tool_call",
                 "tool": tc["name"],
@@ -184,6 +203,7 @@ def _parse_message_to_step(msg: Any) -> dict | None:
         return {"type": "response", "content": _extract_text(msg.content)}
 
     if isinstance(msg, ToolMessage):
+        logger.debug("parse_step | tool_result | call_id=%s", msg.tool_call_id)
         return {"type": "tool_result", "content": _extract_text(msg.content), "call_id": msg.tool_call_id}
 
     return None

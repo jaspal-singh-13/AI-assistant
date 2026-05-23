@@ -1,4 +1,5 @@
 """Call logger — appends every LLM call to logs/calls.jsonl (append-only JSONL).
+Also provides a general-purpose application logger writing to logs/app.log.
 
 FR-OBS-01: Every LLM call logged with full schema (FR §6.3).
 FR-GRD-05: Blocked calls stored with SHA-256 hash only, not raw content.
@@ -17,6 +18,10 @@ This file is the runtime log. Eval scores are in evaluation/results/*.
 from __future__ import annotations
 
 import json
+import logging
+import logging.handlers
+import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -25,6 +30,58 @@ from filelock import FileLock
 
 LOGS_DIR = Path(__file__).parent.parent / "logs"
 CALLS_LOG = LOGS_DIR / "calls.jsonl"
+APP_LOG = LOGS_DIR / "app.log"
+
+
+def configure_logging(level: str = "INFO") -> None:
+    """
+    Set up rotating file + stderr handlers on the root logger.
+
+    Idempotent — safe to call on every Streamlit rerun.
+    Call once at app startup before any other imports emit logs.
+    """
+    root = logging.getLogger()
+    if any(isinstance(h, logging.handlers.RotatingFileHandler) for h in root.handlers):
+        return
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    fmt = "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s"
+    formatter = logging.Formatter(fmt, datefmt="%Y-%m-%dT%H:%M:%SZ")
+
+    file_h = logging.handlers.RotatingFileHandler(
+        APP_LOG, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
+    file_h.setFormatter(formatter)
+
+    stream_h = logging.StreamHandler()
+    stream_h.setFormatter(formatter)
+
+    root.setLevel(getattr(logging, level.upper(), logging.INFO))
+    root.addHandler(file_h)
+    root.addHandler(stream_h)
+
+
+def get_logger(name: str) -> logging.Logger:
+    """Return a named logger. Call at module level: logger = get_logger(__name__)."""
+    return logging.getLogger(name)
+
+
+@contextmanager
+def log_duration(logger: logging.Logger, label: str):
+    """Context manager that logs elapsed ms for any code block at DEBUG level.
+
+    Logs an ERROR (with full traceback) if the block raises an exception,
+    then re-raises so the caller still handles it.
+    """
+    t0 = time.perf_counter()
+    logger.debug("%s — start", label)
+    try:
+        yield
+    except Exception:
+        logger.exception("%s — raised", label)
+        raise
+    finally:
+        ms = (time.perf_counter() - t0) * 1000
+        logger.debug("%s — done in %.1f ms", label, ms)
 
 
 def log_call(

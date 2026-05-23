@@ -7,6 +7,7 @@ File system writes use tmp_path fixture.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -126,6 +127,62 @@ class TestCallLogger:
         from observability.logger import read_calls
         with patch("observability.logger.CALLS_LOG", tmp_path / "nonexistent.jsonl"):
             assert read_calls() == []
+
+
+class TestAppLogger:
+    def setup_method(self):
+        """Clear root logger handlers before each test for isolation."""
+        logging.getLogger().handlers.clear()
+
+    def test_configure_logging_installs_handlers(self, tmp_path):
+        """configure_logging() installs a RotatingFileHandler on the root logger."""
+        import logging.handlers as lh
+        from observability.logger import configure_logging
+        with patch("observability.logger.APP_LOG", tmp_path / "app.log"):
+            with patch("observability.logger.LOGS_DIR", tmp_path):
+                configure_logging(level="DEBUG")
+                root = logging.getLogger()
+                handler_types = [type(h) for h in root.handlers]
+                assert lh.RotatingFileHandler in handler_types
+
+    def test_configure_logging_is_idempotent(self, tmp_path):
+        """Calling configure_logging() twice must not add a second RotatingFileHandler."""
+        import logging.handlers as lh
+        from observability.logger import configure_logging
+        with patch("observability.logger.APP_LOG", tmp_path / "app.log"):
+            with patch("observability.logger.LOGS_DIR", tmp_path):
+                configure_logging()
+                n_rotating = sum(
+                    1 for h in logging.getLogger().handlers
+                    if isinstance(h, lh.RotatingFileHandler)
+                )
+                configure_logging()
+                n_rotating_after = sum(
+                    1 for h in logging.getLogger().handlers
+                    if isinstance(h, lh.RotatingFileHandler)
+                )
+                assert n_rotating == n_rotating_after == 1
+
+    def test_log_duration_logs_elapsed(self, tmp_path, caplog):
+        """log_duration emits a 'done in' DEBUG message on normal exit."""
+        from observability.logger import log_duration, get_logger
+        log = get_logger("test.duration")
+        with caplog.at_level(logging.DEBUG, logger="test.duration"):
+            with log_duration(log, "my_operation"):
+                pass
+        messages = [r.message for r in caplog.records]
+        assert any("my_operation" in m for m in messages)
+        assert any("done in" in m for m in messages)
+
+    def test_log_duration_logs_on_exception(self, caplog):
+        """log_duration emits an ERROR record when the block raises."""
+        from observability.logger import log_duration, get_logger
+        log = get_logger("test.exc")
+        with caplog.at_level(logging.ERROR, logger="test.exc"):
+            with pytest.raises(ValueError):
+                with log_duration(log, "bad_op"):
+                    raise ValueError("boom")
+        assert any("raised" in r.message for r in caplog.records)
 
 
 class TestPricing:

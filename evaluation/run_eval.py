@@ -2,6 +2,8 @@
 
 Usage:
   python evaluation/run_eval.py [--seed 42] [--models claude-sonnet qwen-0.5b]
+                                [--workers 3] [--skip-judge] [--skip-benchmarks]
+                                [--prompt-category all]
 
 FR-EVL-06 + NFR-REP-02 (--seed for reproducibility).
 """
@@ -9,8 +11,11 @@ FR-EVL-06 + NFR-REP-02 (--seed for reproducibility).
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 # Ensure project root is on sys.path when run directly
@@ -44,6 +49,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip LLM-as-judge (faster, avoids extra API calls)",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=3,
+        help="Number of prompts to process concurrently (default: 3)",
+    )
     return parser.parse_args()
 
 
@@ -63,7 +74,7 @@ def _save_cache(cache: dict) -> None:
 
 def main() -> None:
     args = parse_args()
-    print(f"Seed: {args.seed} | Models: {args.models}")
+    print(f"Seed: {args.seed} | Models: {args.models} | Workers: {args.workers}")
 
     from evaluation.framework import EvalFramework, EvalResult
 
@@ -84,39 +95,54 @@ def main() -> None:
     all_scores: list[EvalResult] = []
     comparatives: list[dict] = []
 
-    for i, prompt in enumerate(all_prompts):
-        pid = prompt.get("id", f"prompt_{i}")
-        print(f"  [{i+1}/{len(all_prompts)}] {pid}")
+    # Locks for shared mutable state
+    results_lock = threading.Lock()
+    # Serialises local (OSS) model inference so Qwen GPU calls don't overlap
+    qwen_lock = threading.Lock()
 
-        cache_key = pid
-        if cache_key in cache:
-            cached = cache[cache_key]
-            for s in cached.get("scores", []):
-                all_scores.append(EvalResult(**s))
-            if cached.get("comparative"):
-                comparatives.append(cached["comparative"])
-            continue
+    total = len(all_prompts)
+
+    def _process_prompt(idx: int, prompt: dict) -> None:
+        pid = prompt.get("id", f"prompt_{idx}")
+
+        with results_lock:
+            if pid in cache:
+                cached = cache[pid]
+                for s in cached.get("scores", []):
+                    all_scores.append(EvalResult(**s))
+                if cached.get("comparative"):
+                    comparatives.append(cached["comparative"])
+                print(f"  [{idx+1}/{total}] {pid} (cached)")
+                return
+
+        print(f"  [{idx+1}/{total}] {pid}")
 
         try:
-            claude_result, qwen_result = framework.run_both_models(prompt)
+            claude_result, qwen_result = framework.run_both_models(prompt, qwen_lock)
         except Exception as exc:
             import traceback
             print(f"    run_both_models failed: {exc!r}")
             traceback.print_exc()
-            continue
+            return
 
         prompt_scores: list[EvalResult] = []
 
-        for result in (claude_result, qwen_result):
+        # Score both model responses concurrently
+        def _score_model(result: dict) -> list[EvalResult]:
             model_id = result["model_id"]
             try:
                 scores = framework.score_with_deepeval(result["response_text"], prompt)
                 for s in scores:
                     s.model_id = model_id
-                prompt_scores.extend(scores)
-                all_scores.extend(scores)
+                return scores
             except Exception as exc:
                 print(f"    deepeval failed for {model_id}: {exc}")
+                return []
+
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            score_futs = [ex.submit(_score_model, r) for r in (claude_result, qwen_result)]
+        for fut in score_futs:
+            prompt_scores.extend(fut.result())
 
         comparative: dict | None = None
         if not args.skip_judge:
@@ -128,17 +154,25 @@ def main() -> None:
                     claude_result["model_id"],
                     qwen_result["model_id"],
                 )
-                comparatives.append(comparative)
             except Exception as exc:
                 print(f"    judge failed: {exc}")
 
-        # Write partial cache
-        import dataclasses
-        cache[cache_key] = {
-            "scores": [dataclasses.asdict(s) for s in prompt_scores],
-            "comparative": comparative,
-        }
-        _save_cache(cache)
+        with results_lock:
+            all_scores.extend(prompt_scores)
+            if comparative:
+                comparatives.append(comparative)
+            cache[pid] = {
+                "scores": [dataclasses.asdict(s) for s in prompt_scores],
+                "comparative": comparative,
+            }
+            _save_cache(cache)
+
+    with ThreadPoolExecutor(max_workers=args.workers) as ex:
+        futs = {ex.submit(_process_prompt, i, p): i for i, p in enumerate(all_prompts)}
+        for fut in as_completed(futs):
+            exc = fut.exception()
+            if exc:
+                print(f"  prompt worker raised: {exc!r}")
 
     print("Aggregating results...")
     framework.aggregate(all_scores)
@@ -147,12 +181,11 @@ def main() -> None:
     if comparatives:
         import csv
         comp_path = Path(__file__).parent / "results" / "comparative.csv"
-        if comparatives:
-            fieldnames = list(comparatives[0].keys())
-            with comp_path.open("w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(comparatives)
+        fieldnames = list(comparatives[0].keys())
+        with comp_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(comparatives)
 
     print("Generating charts...")
     try:

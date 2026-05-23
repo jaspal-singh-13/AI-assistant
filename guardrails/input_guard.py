@@ -19,6 +19,9 @@ import re
 import time
 
 from guardrails.llamaguard import GuardResult
+from observability.logger import get_logger, log_duration
+
+logger = get_logger(__name__)
 
 # Patterns that signal prompt injection attempts (DAN, jailbreaks, nested injections)
 _INJECTION_PATTERNS = re.compile(
@@ -49,10 +52,12 @@ def run_input_pipeline(text: str) -> GuardResult:
     PII entities are always returned in result.pii_entities (may be empty list).
     result.stages contains per-stage breakdown for UI display.
     """
+    logger.info("input_pipeline | start | text_len=%d", len(text))
     stages: list[dict] = []
 
     # Stage 1 — Heuristic injection detection
-    rebuff_result = _check_injection(text)
+    with log_duration(logger, "input_pipeline.injection_check"):
+        rebuff_result = _check_injection(text)
     stages.append({
         "name": "Injection check",
         "passed": not rebuff_result.blocked,
@@ -60,12 +65,14 @@ def run_input_pipeline(text: str) -> GuardResult:
         "detail": rebuff_result.reason if rebuff_result.blocked else None,
     })
     if rebuff_result.blocked:
+        logger.warning("input_pipeline | BLOCKED | stage=injection reason=%s", rebuff_result.reason)
         rebuff_result.stages = stages
         return rebuff_result
 
     # Stage 2 — LlamaGuard 3
     from guardrails.llamaguard import classify
-    lg_result = classify(text, role="user")
+    with log_duration(logger, "input_pipeline.llamaguard"):
+        lg_result = classify(text, role="user")
     _SKIP_REASONS = {"llamaguard_skipped_no_token", "llamaguard_error"}
     lg_skipped = lg_result.reason in _SKIP_REASONS
     stages.append({
@@ -81,13 +88,15 @@ def run_input_pipeline(text: str) -> GuardResult:
         ),
     })
     if lg_result.blocked:
+        logger.warning("input_pipeline | BLOCKED | stage=llamaguard category=%s", lg_result.category)
         lg_result.stages = stages
         return lg_result
 
     # Stage 3 — Presidio (redact only, never blocks)
-    t0 = time.perf_counter()
-    pii_entities = _detect_pii(text)
-    pii_latency = (time.perf_counter() - t0) * 1000
+    with log_duration(logger, "input_pipeline.presidio"):
+        t0 = time.perf_counter()
+        pii_entities = _detect_pii(text)
+        pii_latency = (time.perf_counter() - t0) * 1000
     pii_count = len(pii_entities)
     stages.append({
         "name": "Presidio PII",
@@ -96,6 +105,7 @@ def run_input_pipeline(text: str) -> GuardResult:
         "detail": f"{pii_count} {'entity' if pii_count == 1 else 'entities'} detected (redacted from logs)" if pii_count else None,
     })
     total_latency = sum(s["latency_ms"] for s in stages)
+    logger.info("input_pipeline | PASSED | pii_detected=%s", pii_count > 0)
     return GuardResult(blocked=False, pii_entities=pii_entities, latency_ms=total_latency, stages=stages)
 
 

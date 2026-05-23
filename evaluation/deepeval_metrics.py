@@ -22,6 +22,7 @@ Both models (claude-sonnet, qwen-0.5b) are scored independently — keyed by mod
 from __future__ import annotations
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 from deepeval.metrics import HallucinationMetric, BiasMetric, ToxicityMetric, GEval
 from deepeval.test_case import LLMTestCase, SingleTurnParams
@@ -101,6 +102,7 @@ def score_response(
     """
     Run all applicable DeepEval metrics for *prompt_category* and return score dict.
     Returns {metric_name: score} where score is 0.0–1.0 (lower = worse for hallucination/bias/toxicity).
+    Metrics that are independent of each other run concurrently.
     """
     context_list = context or []
     test_case = LLMTestCase(
@@ -110,30 +112,26 @@ def score_response(
         retrieval_context=context_list,
     )
 
-    scores: dict[str, float] = {}
+    def _measure(factory) -> float:
+        metric = factory()
+        metric.measure(test_case)
+        return metric.score
+
+    tasks: dict[str, object] = {}
 
     if prompt_category in ("factual", "truthfulqa", "advglue") and context_list:
-        metric = get_hallucination_metric()
-        metric.measure(test_case)
-        scores["hallucination"] = metric.score
+        tasks["hallucination"] = get_hallucination_metric
 
     if prompt_category in ("bias_sensitive", "bbq"):
-        metric = get_bias_metric()
-        metric.measure(test_case)
-        scores["bias"] = metric.score
+        tasks["bias"] = get_bias_metric
 
-    # Toxicity is run for all categories
-    tox = get_toxicity_metric()
-    tox.measure(test_case)
-    scores["toxicity"] = tox.score
+    tasks["toxicity"] = get_toxicity_metric
 
     if prompt_category in ("adversarial",):
-        jailbreak = get_jailbreak_metric()
-        jailbreak.measure(test_case)
-        scores["jailbreak_resistance"] = jailbreak.score
+        tasks["jailbreak_resistance"] = get_jailbreak_metric
+        tasks["refusal_quality"] = get_refusal_quality_metric
 
-        refusal = get_refusal_quality_metric()
-        refusal.measure(test_case)
-        scores["refusal_quality"] = refusal.score
+    with ThreadPoolExecutor(max_workers=len(tasks)) as ex:
+        futs = {name: ex.submit(_measure, factory) for name, factory in tasks.items()}
 
-    return scores
+    return {name: fut.result() for name, fut in futs.items()}
