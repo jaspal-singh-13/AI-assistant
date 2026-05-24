@@ -125,25 +125,33 @@ def _check_injection(text: str) -> GuardResult:
     return GuardResult(blocked=False, latency_ms=latency_ms)
 
 
+_PII_PATTERNS: dict[str, re.Pattern] = {
+    "EMAIL":       re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"),
+    "PHONE":       re.compile(r"\b(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
+    "SSN":         re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+    "CREDIT_CARD": re.compile(r"\b(?:\d[ -]?){13,16}\b"),
+    "IP_ADDRESS":  re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
+    "PASSPORT":    re.compile(r"\b[A-Z]{1,2}\d{6,9}\b"),
+}
+
+
 def _detect_pii(text: str) -> list:
     """
-    Detect PII entities via Presidio (local inference, no API call).
+    Detect PII entities via regex patterns. Zero dependencies, ~0ms latency.
 
+    Covers: EMAIL, PHONE, SSN, CREDIT_CARD, IP_ADDRESS, PASSPORT.
     Returns list of entity dicts. Does NOT block the message.
-    Skips silently if spaCy model or presidio is unavailable.
     """
-    try:
-        import spacy
-        spacy.load("en_core_web_lg")  # raises OSError if model not installed — skip rather than download
-        from presidio_analyzer import AnalyzerEngine
-        analyzer = AnalyzerEngine()
-        results = analyzer.analyze(text=text, language="en")
-        return [
-            {"entity_type": r.entity_type, "start": r.start, "end": r.end, "score": r.score}
-            for r in results
-        ]
-    except Exception:
-        return []
+    entities = []
+    for entity_type, pattern in _PII_PATTERNS.items():
+        for m in pattern.finditer(text):
+            entities.append({
+                "entity_type": entity_type,
+                "start": m.start(),
+                "end": m.end(),
+                "score": 1.0,
+            })
+    return entities
 
 
 def message_hash(text: str) -> str:
