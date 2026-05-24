@@ -8,6 +8,23 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-05-25
+
+### Added
+- Dashboard home page (`app/streamlit_app.py`) with KPI cards (threads, calls, total cost, avg latency, block rate), per-model mini-cards, condensed cumulative-cost chart snapshot, and evaluation scorecard table
+- `app/pages/01_chat.py` — chat UI promoted to its own named page so the sidebar reads "Chat"
+- `tools/observability_tool.py` — `get_observability_summary(model_id)` read-only tool that returns per-model call count, latency (avg/p50/p95), cost, block rate, and top tool invocations from `logs/calls.jsonl`
+- `tools/evaluation_tool.py` — `get_evaluation_summary(model_id)` read-only tool that returns hallucination, bias & harmful, and content safety scores from `evaluation/results/model_scores.json`
+- `agent/system_prompt.py` — app-level `SYSTEM_PROMPT` constant injected as the first `SystemMessage` on every LLM call; documents all four app pages and provides exact tool-use guidance including when to call each of the five tools
+
+### Changed
+- `memory/manager.py:get_llm_context()` now prepends the app `SYSTEM_PROMPT` SystemMessage before the optional summary SystemMessage and the sliding window messages
+- `tools/registry.py` updated to export `get_observability_summary` and `get_evaluation_summary` instead of `get_metrics`
+- `tests/test_tools.py` — replaced `TestMetricsTool` with `TestObservabilityTool` (4 tests) and `TestEvaluationTool` (3 tests); updated memory context window bound to 12 (adds 1 for app SystemMessage)
+
+### Removed
+- `tools/metrics_tool.py` and `get_metrics` tool — superseded by `get_observability_summary`
+
 ## [0.8.1] — 2026-05-25
 
 ### Changed

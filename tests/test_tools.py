@@ -1,4 +1,4 @@
-"""Unit tests for tools — time, weather (mocked), search (mocked), metrics.
+"""Unit tests for tools — time, weather (mocked), search (mocked), observability, evaluation.
 
 FR §15.4.
 """
@@ -90,27 +90,115 @@ class TestSearchTool:
         assert "No results found." in result
 
 
-class TestMetricsTool:
+class TestObservabilityTool:
+    def _make_entry(self, model_id: str, latency_ms: float, cost: float, blocked: bool = False) -> dict:
+        return {
+            "model_id": model_id,
+            "model_type": "frontier",
+            "latency_ms": latency_ms,
+            "total_cost_usd": cost,
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cost_per_1k_tokens": 0.001,
+            "guardrail_blocked": blocked,
+            "tool_calls": [],
+            "timestamp": "2026-01-01T00:00:00+00:00",
+        }
+
     def test_no_data_returns_message(self, tmp_path):
-        """Returns a descriptive message when calls.jsonl is empty."""
+        """Returns a descriptive message when calls.jsonl is absent."""
         empty_log = tmp_path / "calls.jsonl"
-        with patch("tools.metrics_tool.CALLS_LOG", empty_log):
-            from tools.metrics_tool import get_metrics
-            result = get_metrics.invoke({})
+        with patch("tools.observability_tool.CALLS_LOG", empty_log):
+            from tools.observability_tool import get_observability_summary
+            result = get_observability_summary.invoke({"model_id": ""})
         assert "No call data" in result
 
     def test_reads_existing_log(self, tmp_path):
-        """Parses calls.jsonl and returns summary string."""
+        """Parses calls.jsonl and returns summary with latency and cost."""
         log_file = tmp_path / "calls.jsonl"
-        entry = {
-            "model_key": "claude-sonnet",
-            "latency_ms": 500,
-            "total_cost": 0.002,
-            "blocked": False,
-        }
+        entry = self._make_entry("claude-haiku-20240307", 500.0, 0.002)
         log_file.write_text(json.dumps(entry) + "\n", encoding="utf-8")
-        with patch("tools.metrics_tool.CALLS_LOG", log_file):
-            from tools.metrics_tool import get_metrics
-            result = get_metrics.invoke({})
-        assert "claude-sonnet" in result
-        assert "500ms" in result
+        with patch("tools.observability_tool.CALLS_LOG", log_file):
+            from tools.observability_tool import get_observability_summary
+            result = get_observability_summary.invoke({"model_id": ""})
+        assert "claude-haiku" in result
+        assert "500" in result
+        assert "$0.0020" in result
+
+    def test_two_models_both_shown(self, tmp_path):
+        """When two models are present, both appear in the output."""
+        log_file = tmp_path / "calls.jsonl"
+        lines = [
+            json.dumps(self._make_entry("claude-haiku-20240307", 400.0, 0.001)),
+            json.dumps(self._make_entry("Qwen/Qwen2.5-7B-Instruct", 800.0, 0.0005)),
+        ]
+        log_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        with patch("tools.observability_tool.CALLS_LOG", log_file):
+            from tools.observability_tool import get_observability_summary
+            result = get_observability_summary.invoke({"model_id": ""})
+        assert "claude-haiku" in result
+        assert "Qwen" in result
+
+    def test_model_id_filter(self, tmp_path):
+        """model_id parameter narrows output to matching model."""
+        log_file = tmp_path / "calls.jsonl"
+        lines = [
+            json.dumps(self._make_entry("claude-haiku-20240307", 400.0, 0.001)),
+            json.dumps(self._make_entry("Qwen/Qwen2.5-7B-Instruct", 800.0, 0.0005)),
+        ]
+        log_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        with patch("tools.observability_tool.CALLS_LOG", log_file):
+            from tools.observability_tool import get_observability_summary
+            result = get_observability_summary.invoke({"model_id": "claude"})
+        assert "claude" in result
+        assert "Qwen" not in result
+
+
+class TestEvaluationTool:
+    def _make_scores(self, models: list[str]) -> dict:
+        return {
+            "generated_at": "2026-01-01T00:00:00",
+            "models": {
+                mid: {
+                    "hallucination": {"pass_rate": 0.8, "low_confidence_excluded": 0},
+                    "bias_harmful": {"pass_rate": 0.9, "low_confidence_excluded": 1},
+                    "content_safety": {"pass_rate": 0.95, "low_confidence_excluded": 0},
+                }
+                for mid in models
+            },
+        }
+
+    def test_missing_file_returns_friendly_message(self, tmp_path):
+        """Returns a friendly fallback when model_scores.json is absent."""
+        missing = tmp_path / "model_scores.json"
+        with patch("tools.evaluation_tool.SCORES_FILE", missing):
+            from tools.evaluation_tool import get_evaluation_summary
+            result = get_evaluation_summary.invoke({"model_id": ""})
+        assert "No evaluation results" in result
+        assert "make eval" in result
+
+    def test_reads_existing_scores(self, tmp_path):
+        """Parses model_scores.json and returns hallucination / bias / safety lines."""
+        scores_file = tmp_path / "model_scores.json"
+        scores_file.write_text(
+            json.dumps(self._make_scores(["claude-haiku-20240307"])), encoding="utf-8"
+        )
+        with patch("tools.evaluation_tool.SCORES_FILE", scores_file):
+            from tools.evaluation_tool import get_evaluation_summary
+            result = get_evaluation_summary.invoke({"model_id": ""})
+        assert "claude-haiku" in result
+        assert "Hallucination" in result
+        assert "Content Safety" in result
+
+    def test_model_id_filter(self, tmp_path):
+        """model_id parameter limits output to matching model."""
+        scores_file = tmp_path / "model_scores.json"
+        scores_file.write_text(
+            json.dumps(self._make_scores(["claude-haiku-20240307", "Qwen/Qwen2.5-7B-Instruct"])),
+            encoding="utf-8",
+        )
+        with patch("tools.evaluation_tool.SCORES_FILE", scores_file):
+            from tools.evaluation_tool import get_evaluation_summary
+            result = get_evaluation_summary.invoke({"model_id": "claude"})
+        assert "claude" in result
+        assert "Qwen" not in result

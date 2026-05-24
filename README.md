@@ -2,14 +2,14 @@
 
 **Claude Haiku vs Qwen 2.5 7B** — a side-by-side chat application with shared tools, conversation memory, safety guardrails, real-time observability, and a full automated evaluation suite.
 
-![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![Version](https://img.shields.io/badge/version-0.7.9-green) ![LangGraph](https://img.shields.io/badge/agent-LangGraph-orange)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![Version](https://img.shields.io/badge/version-0.9.0-green) ![LangGraph](https://img.shields.io/badge/agent-LangGraph-orange)
 
 ---
 
 ## Features
 
 - **Dual-model chat** — switch between Claude Haiku (frontier) and Qwen 2.5 7B (OSS) mid-conversation; each message shows its model badge, token count, and cost
-- **LangGraph ReAct agent** — both models share the same tool-calling graph: current time, weather (wttr.in), web search (DuckDuckGo), and a self-metrics tool
+- **LangGraph ReAct agent** — both models share the same tool-calling graph: current time, weather (wttr.in), web search (DuckDuckGo), observability summary, and evaluation summary; a system prompt guides the agent on when to call each tool
 - **Persistent thread memory** — JSON-backed threads with a sliding context window and incremental summary-of-summary so the LLM never re-reads the full history
 - **3-stage input guardrails** — heuristic injection detection (~1 ms) → content safety classifier (Claude Haiku as judge, S1–S13 harm categories) → Presidio PII detection
 - **2-stage output guardrails** — heuristic toxic-language / topic validators → content safety re-check on the assistant response; toggle off in the sidebar for faster responses
@@ -67,6 +67,7 @@ flowchart TD
     User([User]) --> StreamlitUI
 
     subgraph StreamlitUI [Streamlit UI]
+        Dash[Dashboard page]
         Chat[Chat page]
         Obs[Observability page]
         Eval[Evaluation page]
@@ -119,7 +120,7 @@ flowchart TD
 ```
 AI-assistant/
 ├── app/
-│   ├── streamlit_app.py          # Main entry point (Chat page)
+│   ├── streamlit_app.py          # Main entry point (Dashboard — home page)
 │   ├── components/
 │   │   ├── chat_window.py        # Message rendering, model badges, switch dividers
 │   │   ├── thread_sidebar.py     # Thread list, context/trigger sliders, safety toggle
@@ -127,6 +128,7 @@ AI-assistant/
 │   │   ├── state_panel.py        # Collapsible agent reasoning (tool calls + args)
 │   │   └── guardrail_panel.py    # Per-stage guardrail results per assistant message
 │   └── pages/
+│       ├── 01_chat.py            # Dual-model chat with streaming and tool calling
 │       ├── 02_observability.py   # Cost/latency/tokens/tools/safety dashboard
 │       └── 03_evaluation.py      # Scorecard, run eval, browse prompts & results
 │
@@ -144,8 +146,9 @@ AI-assistant/
 │   ├── time_tool.py              # get_current_time()
 │   ├── weather_tool.py           # get_weather(city) via wttr.in
 │   ├── search_tool.py            # web_search(query) via DuckDuckGo
-│   ├── metrics_tool.py           # get_metrics() reads calls.jsonl (agent self-awareness)
-│   └── registry.py               # get_tools() → [time, weather, search, metrics]
+│   ├── observability_tool.py     # get_observability_summary(model_id?) reads calls.jsonl (read-only)
+│   ├── evaluation_tool.py        # get_evaluation_summary(model_id?) reads model_scores.json (read-only)
+│   └── registry.py               # get_tools() → [time, weather, search, obs, eval]
 │
 ├── guardrails/
 │   ├── llamaguard.py             # classify() → GuardResult with S1–S13 harm categories
@@ -190,6 +193,15 @@ AI-assistant/
 ---
 
 ## Usage Guide
+
+### Dashboard
+
+Open `http://localhost:8501` after `make run`. The Dashboard is the home page and shows:
+
+- **KPI cards** — total threads, calls, cost, avg latency, and safety block rate across all models
+- **Per-model cards** — call count, total cost, and avg latency for each configured model
+- **Observability snapshot** — cumulative cost area chart (last 50 calls) with a link to the full Observability page
+- **Evaluation snapshot** — compact scorecard table (Hallucination / Bias & Harmful / Content Safety) built from `evaluation/results/model_scores.json`, with a link to the full Evaluation page
 
 ### Chat
 

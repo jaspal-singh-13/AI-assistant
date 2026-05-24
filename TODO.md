@@ -225,6 +225,24 @@
 
 > Gate met — 2026-05-24 (test gate: 71 tests passing, 0 failures)
 
+## Phase 5b — Dashboard + Read-only Tools
+
+**Gate:** Dashboard renders live KPIs, Chat page accessible via sidebar, both new tools pass tests.
+**Test gate:** `tests/test_tools.py` and `tests/test_memory.py` green.
+
+- [x] `app/streamlit_app.py` — rewritten as Dashboard with KPI cards, per-model cards, observability snapshot, evaluation snapshot
+- [x] `app/pages/01_chat.py` — chat UI extracted to its own page with `page_title="Chat"`
+- [x] `tools/observability_tool.py` — `get_observability_summary(model_id)` read-only tool
+- [x] `tools/evaluation_tool.py` — `get_evaluation_summary(model_id)` read-only tool
+- [x] `tools/registry.py` — updated to use new tools; `get_metrics` removed
+- [x] `agent/system_prompt.py` — app-level `SYSTEM_PROMPT` with page/tool catalogue
+- [x] `memory/manager.py:get_llm_context()` — injects `SYSTEM_PROMPT` as first `SystemMessage`
+- [x] `tests/test_tools.py` — `TestObservabilityTool` (4 tests) + `TestEvaluationTool` (3 tests); `TestMetricsTool` removed
+
+> Gate met — 2026-05-25
+
+---
+
 ## Phase 5 — Deployment
 
 ### deploy

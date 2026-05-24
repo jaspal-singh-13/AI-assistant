@@ -171,10 +171,12 @@ def get_llm_context(thread: dict) -> list["BaseMessage"]:
 
     merged = merge(thread["summaries"])
     lc_messages = dicts_to_messages(recent)
+    from langchain_core.messages import SystemMessage
+    from agent.system_prompt import SYSTEM_PROMPT
+    prefix: list = [SystemMessage(content=SYSTEM_PROMPT)]
     if merged:
-        from langchain_core.messages import SystemMessage
-        return [SystemMessage(content=merged)] + lc_messages
-    return lc_messages
+        prefix.append(SystemMessage(content=merged))
+    return prefix + lc_messages
 
 
 def update_summaries(thread: dict, new_uncovered: list[dict]) -> None:

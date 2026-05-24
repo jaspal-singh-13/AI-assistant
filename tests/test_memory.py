@@ -97,7 +97,7 @@ class TestLLMContext:
     """FR-MEM-02 — LLM context is sliding window + merged summary."""
 
     def test_context_never_exceeds_window_plus_summary(self):
-        """LLM context never exceeds context_window_size + 1 summary SystemMessage."""
+        """LLM context never exceeds app SystemMessage + 1 summary SystemMessage + context_window_size."""
         from memory.manager import get_llm_context
         thread = {
             "context_window_size": 10,
@@ -108,8 +108,8 @@ class TestLLMContext:
         # new_uncovered = older[15:] = messages[0:15][15:] = [] — no trigger
         with patch("memory.manager.update_summaries"):
             result = get_llm_context(thread)
-        # SystemMessage + 10 recent = 11 max
-        assert len(result) <= 11
+        # app SystemMessage + summary SystemMessage + 10 recent = 12 max
+        assert len(result) <= 12
 
     def test_context_label_all_messages(self):
         """Label shows 'LLM sees all N messages' when total <= window."""

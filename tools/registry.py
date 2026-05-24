@@ -14,5 +14,7 @@ def get_tools() -> list[BaseTool]:
     from tools.time_tool import get_current_time
     from tools.weather_tool import get_weather
     from tools.search_tool import web_search
-    from tools.metrics_tool import get_metrics
-    return [get_current_time, get_weather, web_search, get_metrics]
+    from tools.observability_tool import get_observability_summary
+    from tools.evaluation_tool import get_evaluation_summary
+    return [get_current_time, get_weather, web_search,
+            get_observability_summary, get_evaluation_summary]
