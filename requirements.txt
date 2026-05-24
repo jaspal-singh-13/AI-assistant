@@ -15,6 +15,9 @@ langgraph>=0.2
 langfuse>=2.0
 langsmith>=0.1
 
+# Evals
+deepeval>=1.4
+
 # Guardrails
 # presidio-analyzer/anonymizer excluded — requires 400MB spaCy model download
 # that fails on Streamlit Cloud. _detect_pii() degrades gracefully to [] anyway.
