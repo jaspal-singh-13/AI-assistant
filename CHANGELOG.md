@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.9] — 2026-05-24
+
+### Changed
+- Updated Makefile with new targets: `serve` (local FastAPI model server), `modal-deploy` (Modal vLLM deployment), `eval-light` (quick 9-prompt smoke-test)
+- Updated `deploy-hf` target from TODO stub to working `huggingface-cli upload` command accepting `$(HF_SPACE)`
+- Updated `install` target to also download `en_core_web_lg` spaCy model required by Presidio
+- Updated `run` target to use `python -m streamlit run` for cross-platform compatibility
+
 ## [0.7.8] — 2026-05-24
 
 ### Fixed

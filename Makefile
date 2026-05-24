@@ -1,36 +1,47 @@
 # AI Assistant Comparison — Makefile
 # FR §12: All targets listed here.
 
-.PHONY: run eval promptfoo deploy-hf install lint test docker docker-down help
+.PHONY: run serve modal-deploy eval eval-light promptfoo deploy-hf install lint test docker docker-down help
 
 help:
 	@echo "Available targets:"
-	@echo "  run         Start the Streamlit app (local)"
-	@echo "  eval        Run the full evaluation suite"
-	@echo "  promptfoo   Run Promptfoo evaluation (requires npx)"
-	@echo "  deploy-hf   Push HF Spaces deployment to HuggingFace Hub"
-	@echo "  install     Install all Python dependencies"
-	@echo "  lint        Run ruff linter"
-	@echo "  test        Run pytest test suite"
-	@echo "  docker      Build image and start both services (GPU)"
-	@echo "  docker-down Stop and remove containers"
+	@echo "  run          Start the Streamlit app (local)"
+	@echo "  serve        Start the local FastAPI model server (GPU)"
+	@echo "  modal-deploy Deploy OSS model to Modal (vLLM on A10G)"
+	@echo "  eval         Run the full evaluation suite"
+	@echo "  eval-light   Run a quick 9-prompt smoke-test evaluation"
+	@echo "  promptfoo    Run Promptfoo evaluation (requires npx)"
+	@echo "  deploy-hf    Push HF Spaces deployment to HuggingFace Hub"
+	@echo "  install      Install all Python dependencies + spaCy model"
+	@echo "  lint         Run ruff linter"
+	@echo "  test         Run pytest test suite"
+	@echo "  docker       Build image and start both services (GPU)"
+	@echo "  docker-down  Stop and remove containers"
 
 run:
-	streamlit run app/streamlit_app.py
+	python -m streamlit run app/streamlit_app.py
+
+serve:
+	python serve/model_server.py
+
+modal-deploy:
+	modal deploy serve/modal_server.py
 
 eval:
 	python evaluation/run_eval.py
+
+eval-light:
+	python evaluation/run_eval.py --light
 
 promptfoo:
 	npx promptfoo eval --config evaluation/promptfoo.yaml
 
 deploy-hf:
-	@echo "Pushing HF Spaces deployment..."
-	# TODO (Phase 4): huggingface-cli upload deployment/hf_spaces/ <your-space>
-	python -c "print('TODO Phase 4 — configure HF Space name in this target')"
+	huggingface-cli upload deployment/hf_spaces/ $(HF_SPACE) --repo-type space
 
 install:
 	pip install -r requirements.txt
+	python -m spacy download en_core_web_lg
 
 lint:
 	ruff check .

@@ -14,7 +14,7 @@ wheels/
 .env
 
 # Runtime data — generated at run time, not source
-logs/calls.jsonl
+logs/
 memory/threads/*.json
 memory/index.json
 
@@ -43,3 +43,6 @@ EVALUATION.md
 
 .claude
 .cursor
+
+*.log
+
