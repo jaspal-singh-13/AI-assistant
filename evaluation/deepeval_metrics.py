@@ -22,7 +22,6 @@ Both models (claude-sonnet, qwen-0.5b) are scored independently — keyed by mod
 from __future__ import annotations
 
 import os
-from concurrent.futures import ThreadPoolExecutor
 
 from deepeval.metrics import HallucinationMetric, BiasMetric, ToxicityMetric, GEval
 from deepeval.test_case import LLMTestCase, SingleTurnParams
@@ -131,7 +130,7 @@ def score_response(
         tasks["jailbreak_resistance"] = get_jailbreak_metric
         tasks["refusal_quality"] = get_refusal_quality_metric
 
-    with ThreadPoolExecutor(max_workers=len(tasks)) as ex:
-        futs = {name: ex.submit(_measure, factory) for name, factory in tasks.items()}
-
-    return {name: fut.result() for name, fut in futs.items()}
+    # Run sequentially — callers already execute inside a ThreadPoolExecutor for
+    # per-prompt parallelism.  A nested pool creates orphaned asyncio event loops
+    # on Windows (ProactorEventLoop), causing ResourceWarning spam on teardown.
+    return {name: _measure(factory) for name, factory in tasks.items()}

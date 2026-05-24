@@ -1,6 +1,6 @@
 [project]
 name = "ai-assistant"
-version = "0.7.2"
+version = "0.7.8"
 description = "AI Assistant Comparison — Claude Sonnet vs Qwen 2.5 0.5B with full evaluation suite"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,7 +17,7 @@ dependencies = [
     "presidio-anonymizer>=2.2",
     "nemoguardrails>=0.9",
     "filelock>=3.0",
-    "duckduckgo-search>=6.0",
+    "ddgs>=6.0",
     "requests>=2.31",
     "streamlit>=1.35",
     "gradio>=4.0",

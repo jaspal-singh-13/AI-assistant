@@ -8,6 +8,40 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.8] — 2026-05-24
+
+### Fixed
+- Wired Langfuse tracing into the agent stream: `stream_handler.py` now imports `build_run_config` and passes the resulting config (with `LangfuseCallbackHandler`) to `stream_events()`, so all LLM calls, tool steps, and token counts appear in the Langfuse dashboard
+
+## [0.7.7] — 2026-05-24
+
+### Fixed
+- Fixed regression in `evaluation/langsmith_sync.py` where `with Client(...) as client:` caused `AttributeError` because `langsmith.Client` does not implement the context manager protocol; replaced with explicit `try/finally` + `client.close()` guard
+
+## [0.7.6] — 2026-05-24
+
+### Fixed
+- Progress bar in `app/pages/03_evaluation.py` now shows the correct prompt count when `--prompt-ids` or `--light` filters are active; previously showed the unfiltered total (e.g. 45) instead of the actual count being run (e.g. 3)
+
+## [0.7.5] — 2026-05-24
+
+### Fixed
+- Replaced all 6 deprecated `use_container_width=True` usages in `app/pages/03_evaluation.py` with `width='stretch'` (Streamlit deprecation, removal after 2025-12-31)
+
+## [0.7.4] — 2026-05-24
+
+### Fixed
+- Migrated `tools/search_tool.py` from deprecated `duckduckgo_search` package to its renamed successor `ddgs`; updated import from `duckduckgo_search` → `ddgs`
+- Updated `requirements.txt` and `pyproject.toml` dependency from `duckduckgo-search>=6.0` → `ddgs>=6.0`
+
+## [0.7.3] — 2026-05-24
+
+### Fixed
+- Removed nested `ThreadPoolExecutor` in `evaluation/deepeval_metrics.py`; metrics now run sequentially to avoid orphaned asyncio event loops on Windows (`ProactorEventLoop`) that caused `RuntimeError: Event loop is closed` and `ResourceWarning: unclosed transport` spam
+- Wrapped `langsmith.Client` in a `with` context manager in `evaluation/langsmith_sync.py` so its httpx connection pool is explicitly closed after sync, eliminating `ResourceWarning: unclosed socket` at script exit
+- Fixed indentation bug in `_lookup_run_id()` (`langsmith_sync.py` line 55) that would have caused `IndentationError` at runtime
+- Added `warnings.filterwarnings("ignore", category=ResourceWarning)` in `evaluation/run_eval.py` as a safety net for residual third-party async cleanup noise
+
 ## [0.7.2] — 2026-05-24
 
 ### Added

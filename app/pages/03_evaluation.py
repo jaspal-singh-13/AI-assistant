@@ -214,7 +214,7 @@ def render_dashboard() -> None:
     summary_df = _load_summary_csv()
 
     if summary_df is not None and not summary_df.empty:
-        st.altair_chart(_chart_all_metrics(summary_df), use_container_width=True)
+        st.altair_chart(_chart_all_metrics(summary_df), width='stretch')
     else:
         st.info("No summary data found — run an evaluation first.")
 
@@ -331,7 +331,7 @@ def render_run_eval() -> None:
     run_col, status_col = st.columns([1, 3])
     with run_col:
         run_disabled = st.session_state["eval_running"] or not selected_models
-        if st.button("Run Evaluation", type="primary", disabled=run_disabled, use_container_width=True):
+        if st.button("Run Evaluation", type="primary", disabled=run_disabled, width='stretch'):
             cmd = [sys.executable, "evaluation/run_eval.py"]
             cmd += ["--models"] + selected_models
             cmd += ["--seed", str(seed)]
@@ -383,10 +383,16 @@ def render_run_eval() -> None:
         stage = "Starting…"
 
         for line in display_lines:
-            # e.g. "load_prompts | done | n=9"
+            # e.g. "load_prompts | done | n=45"  (before --prompt-ids / --light filter)
             m = re.search(r"load_prompts \| done \| n=(\d+)", line)
             if m:
                 total_match = int(m.group(1))
+
+            # e.g. "processing 3 prompts with 1 workers"  (after all filters applied)
+            # overrides the pre-filter count so the progress bar reflects reality
+            m2 = re.search(r"processing (\d+) prompts with", line)
+            if m2:
+                total_match = int(m2.group(1))
 
             # e.g. "prompt | [2/9] factual_001"  or "prompt | cached | [2/9] ..."
             if re.search(r"prompt \|.*\[\d+/\d+\]", line):
@@ -453,7 +459,7 @@ def render_prompts_and_results() -> None:
         ])
 
         st.caption(f"{len(df)} prompts")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
 
     # ── Add Custom Prompt ─────────────────────────────────────────────────────
     with sub_tabs[1]:
@@ -525,11 +531,11 @@ def render_prompts_and_results() -> None:
             # Mean scores summary
             st.markdown("**Mean scores per model × metric**")
             pivot = df_filtered.groupby(["model_id", "metric"])["score"].mean().round(4).unstack(fill_value=0)
-            st.dataframe(pivot.style.background_gradient(axis=None, cmap="RdYlGn"), use_container_width=True)
+            st.dataframe(pivot.style.background_gradient(axis=None, cmap="RdYlGn"), width='stretch')
 
             st.divider()
             st.caption(f"{len(df_filtered)} rows")
-            st.dataframe(df_filtered, use_container_width=True, hide_index=True)
+            st.dataframe(df_filtered, width='stretch', hide_index=True)
             st.download_button("Download summary.csv", df_filtered.to_csv(index=False), "summary.csv", "text/csv")
 
     # ── Comparative CSV ───────────────────────────────────────────────────────
@@ -562,7 +568,7 @@ def render_prompts_and_results() -> None:
             st.caption(f"{len(df_comp_f)} comparisons")
             st.dataframe(
                 df_comp_f.style.apply(_highlight_winner, axis=1),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
             )
             st.download_button("Download comparative.csv", df_comp_f.to_csv(index=False), "comparative.csv", "text/csv")

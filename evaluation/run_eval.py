@@ -16,8 +16,15 @@ import dataclasses
 import json
 import sys
 import threading
+import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
+# Third-party async HTTP clients (httpx, langsmith, anthropic SDK) leave sockets
+# unclosed during interpreter shutdown when used inside ThreadPoolExecutor threads
+# on Windows (ProactorEventLoop).  The sockets are cleaned up by the OS — suppress
+# the cosmetic warnings so they don't pollute eval output.
+warnings.filterwarnings("ignore", category=ResourceWarning)
 
 # Ensure project root is on sys.path when run directly
 sys.path.insert(0, str(Path(__file__).parent.parent))

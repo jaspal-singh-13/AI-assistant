@@ -1,11 +1,11 @@
 """Web search tool — top 5 results via DuckDuckGo.
 
-FR-TOOL-04: Uses duckduckgo-search Python package (free, no API key).
+FR-TOOL-04: Uses ddgs Python package (free, no API key).
 """
 
 from __future__ import annotations
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 from langchain_core.tools import tool
 
 

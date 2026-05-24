@@ -81,6 +81,7 @@ def run_pending_response() -> None:
     from guardrails.input_guard import CANNED_REFUSAL, message_hash, run_input_pipeline
     from guardrails.output_guard import CANNED_OUTPUT_REFUSAL, run_output_pipeline
     from memory.manager import append_message, get_llm_context, list_threads
+    from observability.langfuse_query import build_run_config
     from observability.logger import log_call
     from observability.pricing import compute_cost, fetch_pricing
 
@@ -180,8 +181,14 @@ def run_pending_response() -> None:
 
         status.markdown(_THINKING_HTML, unsafe_allow_html=True)
 
+        run_config = build_run_config(
+            thread_id=thread.get("id", "unknown"),
+            model_label=config.model_label,
+            model_id=config.model_id,
+        )
+
         try:
-            for event in stream_events(graph, msg_dicts):
+            for event in stream_events(graph, msg_dicts, run_config):
                 etype = event.get("type")
 
                 if etype == "tool_call":

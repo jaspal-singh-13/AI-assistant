@@ -35,24 +35,28 @@ def sync_scores_to_langsmith(results: list["EvalResult"]) -> None:
     from langsmith import Client  # type: ignore[import]
 
     logger.info("sync_scores_to_langsmith | start | n=%d", len(results))
-    client = Client(api_key=api_key)
     synced = 0
-    for r in results:
-        run_id = _lookup_run_id(client, r.model_id, r.prompt_id)
-        if run_id:
-            client.create_feedback(
-                run_id=run_id,
-                key=r.metric,
-                score=r.score / 5.0,
-                comment=r.reasoning or None,
-            )
-            synced += 1
+    client = Client(api_key=api_key)
+    try:
+        for r in results:
+            run_id = _lookup_run_id(client, r.model_id, r.prompt_id)
+            if run_id:
+                client.create_feedback(
+                    run_id=run_id,
+                    key=r.metric,
+                    score=r.score / 5.0,
+                    comment=r.reasoning or None,
+                )
+                synced += 1
+    finally:
+        if hasattr(client, "close"):
+            client.close()
     logger.info("sync_scores_to_langsmith | done | synced=%d / %d", synced, len(results))
 
 
 def _lookup_run_id(client, model_id: str, prompt_id: str) -> str | None:
     """Find the LangSmith run ID for a (model_id, prompt_id) pair."""
-        project = os.environ.get("LANGSMITH_PROJECT", "ai-assistant-eval")
+    project = os.environ.get("LANGSMITH_PROJECT", "ai-assistant-eval")
     try:
         runs = list(client.list_runs(
             project_name=project,
