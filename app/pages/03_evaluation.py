@@ -256,7 +256,26 @@ def _start_eval(cmd: list[str]) -> None:
     t.start()
 
 
+def _deepeval_available() -> bool:
+    try:
+        import deepeval  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def render_run_eval() -> None:
+    if not _deepeval_available():
+        st.warning(
+            "**Evaluation runner is not available in this environment.**\n\n"
+            "The full evaluation suite requires `deepeval` which is not installed on Streamlit Cloud. "
+            "Pre-computed scores are shown in the **Dashboard** tab.\n\n"
+            "To run evaluations locally:\n"
+            "```bash\npip install -r requirements-local.txt\nmake eval\n```",
+            icon="⚠️",
+        )
+        return
+
     # Init session state keys
     if "eval_running" not in st.session_state:
         st.session_state["eval_running"] = False

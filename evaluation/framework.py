@@ -145,8 +145,10 @@ class EvalFramework:
         return results[0], results[1]
 
     def score_with_deepeval(self, response: str, prompt: dict) -> list[EvalResult]:
-        """Run DeepEval metrics on *response*. Returns one EvalResult per metric."""
-        from evaluation.deepeval_metrics import score_response, METRIC_TO_DIMENSION
+        """Run DeepEval metrics on *response*. Returns one EvalResult per metric. Returns [] if deepeval not installed."""
+        from evaluation.deepeval_metrics import score_response, METRIC_TO_DIMENSION, DEEPEVAL_AVAILABLE
+        if not DEEPEVAL_AVAILABLE:
+            return []
 
         category = prompt.get("category", "factual")
         context = [prompt.get("context", "")] if prompt.get("context") else None

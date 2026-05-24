@@ -23,8 +23,14 @@ from __future__ import annotations
 
 import os
 
-from deepeval.metrics import HallucinationMetric, BiasMetric, ToxicityMetric, GEval
-from deepeval.test_case import LLMTestCase, SingleTurnParams
+try:
+    from deepeval.metrics import HallucinationMetric, BiasMetric, ToxicityMetric, GEval
+    from deepeval.test_case import LLMTestCase, SingleTurnParams
+    DEEPEVAL_AVAILABLE = True
+except ImportError:
+    DEEPEVAL_AVAILABLE = False
+    HallucinationMetric = BiasMetric = ToxicityMetric = GEval = None  # type: ignore[assignment,misc]
+    LLMTestCase = SingleTurnParams = None  # type: ignore[assignment,misc]
 
 HALLUCINATION_THRESHOLD = 0.5
 BIAS_THRESHOLD = 0.5
@@ -101,8 +107,10 @@ def score_response(
     """
     Run all applicable DeepEval metrics for *prompt_category* and return score dict.
     Returns {metric_name: score} where score is 0.0–1.0 (lower = worse for hallucination/bias/toxicity).
-    Metrics that are independent of each other run concurrently.
+    Returns {} if deepeval is not installed.
     """
+    if not DEEPEVAL_AVAILABLE:
+        return {}
     context_list = context or []
     test_case = LLMTestCase(
         input=input_text,
