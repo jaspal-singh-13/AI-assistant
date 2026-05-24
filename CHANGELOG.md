@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-05-25
+
+### Changed
+- Replaced Presidio + spaCy PII detection with zero-dependency regex patterns (EMAIL, PHONE, SSN, CREDIT_CARD, IP_ADDRESS, PASSPORT) — eliminates 400MB model download, works on Streamlit Cloud with no permissions issues
+- Added `sys.path` repo-root insertion in `streamlit_app.py` and page files so local modules resolve correctly on Streamlit Cloud
+- Removed `presidio-analyzer`/`presidio-anonymizer` from `requirements.txt` and `pyproject.toml` slim deps; moved to `[dev]` optional group
+- Removed `uv.lock` from version control; added to `.gitignore`
+- Added `[build-system]` and `[tool.setuptools.packages.find]` to `pyproject.toml` so local packages install correctly via `pip install .`
+
 ## [0.8.0] — 2026-05-25
 
 ### Added
