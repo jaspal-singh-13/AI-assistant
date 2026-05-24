@@ -3,8 +3,10 @@
 
 models:
   - type: main
-    engine: anthropic
-    model: claude-haiku-4-5-20251001
+    engine: langchain
+    model: ChatAnthropic
+    parameters:
+      model: claude-haiku-4-5-20251001
 
 rails:
   input:

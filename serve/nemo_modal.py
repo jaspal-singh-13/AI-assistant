@@ -31,6 +31,7 @@ image = (
         "fastapi>=0.111",
         "uvicorn>=0.29",
     )
+    .env({"NEMOGUARDRAILS_LLM_FRAMEWORK": "langchain"})
     .add_local_dir(str(NEMO_DIR), remote_path="/app/nemo")
 )
 
