@@ -14,6 +14,16 @@ FR-MOD-01 to FR-MOD-05, FR-MEM-03, FR-AGT-01 to FR-AGT-04.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Streamlit Cloud runs `streamlit run app/streamlit_app.py` which puts app/ on
+# sys.path but NOT the repo root. Insert the repo root so local packages like
+# observability, agent, memory, tools, guardrails are importable.
+_repo_root = str(Path(__file__).parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
 from dotenv import load_dotenv
 load_dotenv()  # must run before any langchain/anthropic imports read env vars
 
