@@ -130,8 +130,11 @@ def _detect_pii(text: str) -> list:
     Detect PII entities via Presidio (local inference, no API call).
 
     Returns list of entity dicts. Does NOT block the message.
+    Skips silently if spaCy model or presidio is unavailable.
     """
     try:
+        import spacy
+        spacy.load("en_core_web_lg")  # raises OSError if model not installed — skip rather than download
         from presidio_analyzer import AnalyzerEngine
         analyzer = AnalyzerEngine()
         results = analyzer.analyze(text=text, language="en")
