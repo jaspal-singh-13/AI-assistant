@@ -25,7 +25,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "deepeval>=1.4",
     "datasets>=2.0",
     "nemoguardrails>=0.9",
     "gradio>=4.0",
