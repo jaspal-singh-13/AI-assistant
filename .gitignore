@@ -44,5 +44,8 @@ EVALUATION.md
 .claude
 .cursor
 
+# uv lockfile — generated artifact, not committed
+uv.lock
+
 *.log
 
