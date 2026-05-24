@@ -133,7 +133,7 @@
 
 ### guardrails/nemo/
 [x] `config.yml` and `rails.co` — 4 declarative rails written
-[ ] End-to-end test that NeMo rails load and trigger correctly
+[x] End-to-end test that NeMo rails load and trigger correctly
 
 ### guardrails — UI metadata
 [x] `GuardResult.stages` field added to `llamaguard.py` — per-stage breakdown for UI

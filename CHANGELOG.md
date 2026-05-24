@@ -8,6 +8,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-05-25
+
+### Added
+- `serve/presidio_modal.py` — Modal CPU service with spaCy `en_core_web_lg` baked into the container image; exposes `POST /detect` for full NER-based PII detection (PERSON, LOCATION, ORGANIZATION, etc.)
+- `serve/nemo_modal.py` — Modal service wrapping NeMo Guardrails; exposes `POST /check_input` and `POST /check_output` using the existing `guardrails/nemo/` Colang config
+- `guardrails/nemo_client.py` — lightweight HTTP client for `NEMO_SERVE_URL`; gracefully returns `(False, None)` when env var is absent or service unreachable
+- NeMo Guardrails wired as Stage 4 of `input_guard.py` and Stage 3 of `output_guard.py` — fully optional, shown as "skipped" in the guardrail panel when `NEMO_SERVE_URL` is not set
+- `deepeval>=1.4` and `datasets>=2.0` restored to `[project.dependencies]` and `requirements.txt` so the evaluation page works on Streamlit Cloud without `ModuleNotFoundError`
+- Modal Microservices table added to `README.md` with deploy commands for all three services
+
+### Changed
+- `guardrails/nemo/config.yml` — switched LLM engine from `openai/gpt-3.5-turbo` to `anthropic/claude-haiku-4-5-20251001` (project uses Anthropic, not OpenAI)
+- `guardrails/input_guard.py` `_detect_pii()` — tries `PRESIDIO_SERVE_URL/detect` first for full NER; falls back to local regex patterns if unset or unreachable
+- `deepeval` and `datasets` removed from `[project.optional-dependencies] dev` (now in main deps)
+- `.env.example` updated with `PRESIDIO_SERVE_URL` and `NEMO_SERVE_URL` placeholders
+
 ## [0.9.0] — 2026-05-25
 
 ### Added

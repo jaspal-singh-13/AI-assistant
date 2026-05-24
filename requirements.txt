@@ -17,6 +17,7 @@ langsmith>=0.1
 
 # Evals
 deepeval>=1.4
+datasets>=2.0
 
 # Guardrails
 # presidio-analyzer/anonymizer excluded — requires 400MB spaCy model download

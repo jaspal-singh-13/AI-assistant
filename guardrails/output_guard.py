@@ -11,6 +11,8 @@ Stage 1 uses the project's own heuristic validators instead.
 
 from __future__ import annotations
 
+import os
+
 from guardrails.llamaguard import GuardResult
 from observability.logger import get_logger, log_duration
 
@@ -71,6 +73,31 @@ def run_output_pipeline(response_text: str) -> GuardResult:
         logger.warning("output_pipeline | BLOCKED | stage=llamaguard category=%s", lg_result.category)
         lg_result.stages = stages
         return lg_result
+
+    # Stage 3 — NeMo Guardrails (declarative rails, optional Modal service)
+    import time as _time
+    from guardrails import nemo_client
+    with log_duration(logger, "output_pipeline.nemo"):
+        t0 = _time.perf_counter()
+        nemo_blocked, nemo_rail = nemo_client.check_output(response_text)
+        nemo_latency = (_time.perf_counter() - t0) * 1000
+    nemo_skipped = not bool(os.environ.get("NEMO_SERVE_URL"))
+    stages.append({
+        "name": "NeMo Guardrails",
+        "passed": not nemo_blocked,
+        "skipped": nemo_skipped,
+        "latency_ms": nemo_latency,
+        "detail": (
+            "NEMO_SERVE_URL not set — skipped" if nemo_skipped
+            else nemo_rail if nemo_blocked
+            else None
+        ),
+    })
+    if nemo_blocked:
+        logger.warning("output_pipeline | BLOCKED | stage=nemo rail=%s", nemo_rail)
+        result = GuardResult(blocked=True, reason=f"nemo:{nemo_rail}", latency_ms=nemo_latency)
+        result.stages = stages
+        return result
 
     total_latency = sum(s["latency_ms"] for s in stages)
     logger.info("output_pipeline | PASSED")

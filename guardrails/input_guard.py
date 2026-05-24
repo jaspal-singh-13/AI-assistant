@@ -15,8 +15,11 @@ FR-GRD-01, FR-GRD-02, FR-GRD-06, NFR-PERF-01 (total < 400ms).
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import time
+
+import requests as _requests
 
 from guardrails.llamaguard import GuardResult
 from observability.logger import get_logger, log_duration
@@ -104,6 +107,30 @@ def run_input_pipeline(text: str) -> GuardResult:
         "latency_ms": pii_latency,
         "detail": f"{pii_count} {'entity' if pii_count == 1 else 'entities'} detected (redacted from logs)" if pii_count else None,
     })
+    # Stage 4 — NeMo Guardrails (declarative rails, optional Modal service)
+    from guardrails import nemo_client
+    with log_duration(logger, "input_pipeline.nemo"):
+        t0 = time.perf_counter()
+        nemo_blocked, nemo_rail = nemo_client.check_input(text)
+        nemo_latency = (time.perf_counter() - t0) * 1000
+    nemo_skipped = not bool(os.environ.get("NEMO_SERVE_URL"))
+    stages.append({
+        "name": "NeMo Guardrails",
+        "passed": not nemo_blocked,
+        "skipped": nemo_skipped,
+        "latency_ms": nemo_latency,
+        "detail": (
+            "NEMO_SERVE_URL not set — skipped" if nemo_skipped
+            else nemo_rail if nemo_blocked
+            else None
+        ),
+    })
+    if nemo_blocked:
+        logger.warning("input_pipeline | BLOCKED | stage=nemo rail=%s", nemo_rail)
+        result = GuardResult(blocked=True, reason=f"nemo:{nemo_rail}", latency_ms=nemo_latency)
+        result.stages = stages
+        return result
+
     total_latency = sum(s["latency_ms"] for s in stages)
     logger.info("input_pipeline | PASSED | pii_detected=%s", pii_count > 0)
     return GuardResult(blocked=False, pii_entities=pii_entities, latency_ms=total_latency, stages=stages)
@@ -137,11 +164,26 @@ _PII_PATTERNS: dict[str, re.Pattern] = {
 
 def _detect_pii(text: str) -> list:
     """
-    Detect PII entities via regex patterns. Zero dependencies, ~0ms latency.
+    Detect PII entities. Tries the Modal Presidio service first (full NER —
+    PERSON, LOCATION, ORGANIZATION, etc.), falls back to local regex patterns
+    if PRESIDIO_SERVE_URL is unset or the call fails.
 
-    Covers: EMAIL, PHONE, SSN, CREDIT_CARD, IP_ADDRESS, PASSPORT.
     Returns list of entity dicts. Does NOT block the message.
     """
+    url = os.environ.get("PRESIDIO_SERVE_URL")
+    if url:
+        try:
+            resp = _requests.post(
+                f"{url.rstrip('/')}/detect",
+                json={"text": text},
+                timeout=5,
+            )
+            resp.raise_for_status()
+            return resp.json().get("entities", [])
+        except Exception:
+            pass  # fall through to regex
+
+    # Regex fallback — covers structured PII with no external deps
     entities = []
     for entity_type, pattern in _PII_PATTERNS.items():
         for m in pattern.finditer(text):

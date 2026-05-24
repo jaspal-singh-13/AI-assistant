@@ -383,6 +383,28 @@ Copy `.env.example` to `.env` and fill in the values you need.
 
 ---
 
+## Modal Microservices
+
+Three services run on Modal — deploy each once, then paste the URL into Streamlit Cloud secrets.
+
+| Service | File | Secret key | What it does |
+|---|---|---|---|
+| Qwen 7B (vLLM) | `serve/modal_server.py` | `OSS_SERVE_URL` | OSS model inference |
+| Presidio PII | `serve/presidio_modal.py` | `PRESIDIO_SERVE_URL` | Full NER-based PII detection (PERSON, ORG, LOC…) |
+| NeMo Guardrails | `serve/nemo_modal.py` | `NEMO_SERVE_URL` | Declarative conversation rails |
+
+```bash
+# Deploy all three (run once per machine, credentials saved in ~/.modal.toml)
+modal deploy serve/modal_server.py
+modal deploy serve/presidio_modal.py
+modal deploy serve/nemo_modal.py
+```
+
+> **NeMo secret:** `nemo_modal.py` reads `ANTHROPIC_API_KEY` from a Modal secret named `anthropic-secret`.
+> Create it once: `modal secret create anthropic-secret ANTHROPIC_API_KEY=sk-ant-...`
+
+---
+
 ## Makefile Targets
 
 ```bash
