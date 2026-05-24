@@ -28,6 +28,7 @@ image = (
     .pip_install(
         "nemoguardrails>=0.9",
         "langchain>=0.3",
+        "langchain-community>=0.3",
         "langchain-anthropic>=0.3",
         "fastapi>=0.111",
         "uvicorn>=0.29",
