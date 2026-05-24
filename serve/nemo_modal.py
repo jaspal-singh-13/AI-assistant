@@ -27,6 +27,7 @@ image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
         "nemoguardrails>=0.9",
+        "langchain>=0.3",
         "langchain-anthropic>=0.3",
         "fastapi>=0.111",
         "uvicorn>=0.29",
