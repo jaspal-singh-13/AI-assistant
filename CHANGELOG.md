@@ -8,6 +8,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-05-25
+
+### Added
+- `requirements-local.txt` — full local-dev requirements (GPU inference, evals, Modal, NeMo guardrails, dev tools)
+
+### Changed
+- `requirements.txt` slimmed to Streamlit Cloud-compatible subset: removed `nemoguardrails`, `torch`, `transformers`, `accelerate`, `bitsandbytes`, `fastapi`, `uvicorn`, `modal`, `gradio`, `deepeval`, `datasets`, `pytest`, `ruff`; added `python-dotenv`
+- `make install` now installs from `requirements-local.txt` to keep the full local-dev experience
+- `README.md` Quick Start section updated to document both requirements files with a comparison table
+
 ## [0.7.9] — 2026-05-24
 
 ### Changed

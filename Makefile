@@ -40,7 +40,7 @@ deploy-hf:
 	huggingface-cli upload deployment/hf_spaces/ $(HF_SPACE) --repo-type space
 
 install:
-	pip install -r requirements.txt
+	pip install -r requirements-local.txt
 	python -m spacy download en_core_web_lg
 
 lint:
