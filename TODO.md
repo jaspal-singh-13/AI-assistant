@@ -103,6 +103,7 @@
 [x] File lock for concurrent writes — filelock used, test passing
 [x] `configure_logging()`, `get_logger()`, `log_duration()` — app-level logger (rotating file + stderr, idempotent, elapsed-time tracing) — 4 tests passing
 [x] Logger wired into `agent/factory.py`, `guardrails/input_guard.py`, `guardrails/output_guard.py`, `guardrails/llamaguard.py`, `memory/manager.py`, `app/components/stream_handler.py`
+[x] Logger wired into all evaluation scripts: `evaluation/run_eval.py`, `evaluation/framework.py`, `evaluation/llm_judge.py`, `evaluation/langsmith_sync.py`, `evaluation/benchmarks/loader.py`
 
 ### observability/pricing.py
 [x] `hours_since_fetch()` — 1 test passing

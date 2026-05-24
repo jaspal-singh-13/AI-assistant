@@ -1,0 +1,64 @@
+# Shared GPU resource config reused by both services
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+
+  # ── OSS model server (FastAPI + GPU inference) ─────────────────────────────
+  model-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-assistant
+    container_name: ai-model-server
+    command: python serve/model_server.py
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Ensure the server listens on all interfaces inside the container
+      OSS_HOST: "0.0.0.0"
+      OSS_PORT: "8000"
+    volumes:
+      # Cache HuggingFace model weights so they survive container restarts
+      - hf-cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s    # model load takes ~60–120s on first start
+    restart: unless-stopped
+    <<: *gpu
+
+  # ── Streamlit app ──────────────────────────────────────────────────────────
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-assistant
+    container_name: ai-streamlit
+    command: python -m streamlit run app/streamlit_app.py --server.port 8501
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      # Point the app at the model-server service (Docker internal DNS)
+      OSS_SERVE_URL: "http://model-server:8000/v1"
+    depends_on:
+      model-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
+volumes:
+  hf-cache:
+    driver: local

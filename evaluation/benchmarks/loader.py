@@ -10,6 +10,10 @@ import json
 import random
 from pathlib import Path
 
+from observability.logger import get_logger
+
+logger = get_logger(__name__)
+
 SAMPLES_DIR = Path(__file__).parent / "samples"
 
 BENCHMARKS = {
@@ -51,14 +55,17 @@ def load_benchmark(name: str, seed: int = 42) -> list[dict]:
 
     cache_file: Path = cfg["file"]
     if cache_file.exists():
+        logger.debug("load_benchmark | cache hit | name=%s", name)
         return json.loads(cache_file.read_text(encoding="utf-8"))
 
+    logger.info("load_benchmark | downloading | name=%s hf_id=%s", name, cfg["hf_id"])
     from datasets import load_dataset  # type: ignore[import]
 
     ds = load_dataset(cfg["hf_id"], cfg["config"], split=cfg["split"])
     samples = _normalise(name, ds, cfg["n_samples"], seed)
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     cache_file.write_text(json.dumps(samples, indent=2, ensure_ascii=False), encoding="utf-8")
+    logger.info("load_benchmark | cached | name=%s n=%d", name, len(samples))
     return samples
 
 

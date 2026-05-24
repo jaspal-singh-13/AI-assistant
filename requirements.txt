@@ -1,6 +1,7 @@
 # Agent core
 langchain>=0.3
 langchain-anthropic>=0.3
+langchain-openai>=0.1
 langchain-huggingface>=0.1
 langgraph>=0.2
 
@@ -26,10 +27,14 @@ requests>=2.31
 streamlit>=1.35
 
 # Deploy
+modal>=0.73
 gradio>=4.0
 transformers>=4.40
 torch>=2.2
 accelerate>=0.30
+fastapi>=0.111
+uvicorn>=0.29
+bitsandbytes>=0.46.1  # 0.49.2 tested; required for 4-bit/8-bit quantization
 
 # Utilities
 nest_asyncio>=1.6

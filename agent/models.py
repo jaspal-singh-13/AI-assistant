@@ -65,6 +65,15 @@ def build_llm(key: str):
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(model=config.model_id, **config.extra_kwargs)
     else:
+        serve_url = os.environ.get("OSS_SERVE_URL")
+        if serve_url:
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(
+                base_url=serve_url,
+                api_key="local",
+                model=config.model_id,
+                **config.extra_kwargs,
+            )
         from agent.local_llm import LocalTransformersChatModel
         return LocalTransformersChatModel(
             model_name=config.hf_repo,

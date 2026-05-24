@@ -8,11 +8,69 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-05-24
+
+### Added
+- Added `serve/modal_server.py` — Modal deployment of Qwen2.5-7B-Instruct via vLLM on an A10G GPU; exposes OpenAI-compatible `/v1/chat/completions` with no local GPU required
+- Added `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` to `.env` and `.env.example`
+- Updated `OSS_SERVE_URL` in `.env` to point to the live Modal endpoint
+- Added `modal>=0.73` to `requirements.txt`
+
+## [0.7.1] — 2026-05-24
+
+### Added
+- Added `Dockerfile` — single CUDA 12.1 image shared by both services
+- Added `docker-compose.yml` — `model-server` (FastAPI GPU) + `streamlit` services; Streamlit waits for model-server health check; HuggingFace weights cached in a named volume
+- Added `.dockerignore` to exclude venv, secrets, cache, and build artefacts from the image
+- Added `make docker` and `make docker-down` targets to Makefile
+
+## [0.7.0] — 2026-05-24
+
+### Added
+- Added `serve/model_server.py` — standalone FastAPI server that loads the OSS model on GPU and exposes an OpenAI-compatible `/v1/chat/completions` endpoint with streaming support
+- Added `OSS_QUANT` env var (`4bit` | `8bit` | `16bit`) to control GPU VRAM usage via `bitsandbytes` quantization
+- Added `OSS_SERVE_URL` env var; when set, `build_llm()` routes OSS model calls to the FastAPI server via `ChatOpenAI` instead of running local CPU inference
+- Added `fastapi`, `uvicorn`, `bitsandbytes`, `langchain-openai` to `requirements.txt`
+
+## [0.6.6] — 2026-05-24
+
+### Changed
+- Replaced static matplotlib charts with a single interactive Altair horizontal grouped bar chart in the Evaluation Dashboard; supports hover tooltips and pan/zoom
+
+## [0.6.5] — 2026-05-24
+
+### Changed
+- Replaced static radar chart PNG on the Evaluation Dashboard with four inline matplotlib charts: all-metrics horizontal grouped bar, pass/fail stacked bar, per-metric score distribution box plot, and category × model heatmap
+- Added `_load_summary_csv()` helper and chart functions `_fig_all_metrics_bar`, `_fig_score_distribution`, `_fig_category_heatmap`, `_fig_pass_fail` in `app/pages/03_evaluation.py`
+
+## [0.6.4] — 2026-05-24
+
+### Added
+- New Streamlit page `app/pages/03_evaluation.py` with three tabs: Dashboard (scorecard metrics + charts from `model_scores.json`), Run Evaluation (config panel + prompt filter multiselect + live subprocess output), and Prompts & Results (prompt browser, add custom prompt form, summary.csv and comparative.csv tables)
+- Added `--prompt-ids` argument to `run_eval.py` to run only specific prompt IDs, enabling targeted evaluation from the UI
+
+## [0.6.3] — 2026-05-24
+
+### Added
+- Added "Safety guardrails" toggle to the sidebar; when off, both `run_input_pipeline` and `run_output_pipeline` are bypassed entirely, reducing per-message latency by ~300–400 ms
+
+## [0.6.2] — 2026-05-24
+
+### Added
+- Added `--light` flag to `run_eval.py`: keeps 3 randomly-sampled prompts per category (9 total, seeded by `--seed`) for fast smoke-test runs
+
+## [0.5.5] — 2026-05-24
+
+### Fixed
+- Fixed `langsmith_sync.py` reading wrong env var `LANGCHAIN_PROJECT` instead of `LANGSMITH_PROJECT`, causing all LangSmith score uploads to fail with "Project not found"
+
 ## [0.6.0] — 2026-05-24
 
 ### Added
 - Implemented application logger in `observability/logger.py`: `configure_logging()` (rotating file + stderr handlers, idempotent), `get_logger()` (named logger factory), and `log_duration()` (context manager for elapsed-time tracing with automatic exception logging)
 - Wired `get_logger(__name__)` into `agent/factory.py`, `guardrails/input_guard.py`, `guardrails/output_guard.py`, `guardrails/llamaguard.py`, `memory/manager.py`, and `app/components/stream_handler.py` — INFO/WARNING/ERROR/DEBUG calls cover all major code paths
+- Wired `get_logger(__name__)` into all evaluation scripts: `evaluation/run_eval.py` (pipeline milestones, worker errors), `evaluation/framework.py` (prompt loading, model invocations, aggregation), `evaluation/llm_judge.py` (judge calls, JSON parse warnings), `evaluation/langsmith_sync.py` (sync start/done/skip), and `evaluation/benchmarks/loader.py` (cache hit/miss, download)
+- `run_eval.py` now calls `configure_logging()` at startup so eval runs write to `logs/app.log`; replaced all bare `print()` + `traceback.print_exc()` error reporting with structured logger calls
 - Added `configure_logging()` call at Streamlit startup in `app/streamlit_app.py` (respects `LOG_LEVEL` env var, defaults to `INFO`)
 - Added `TestAppLogger` class (4 tests) to `tests/test_observability.py` covering handler installation, idempotency, elapsed-time logging, and exception tracing
 

@@ -107,9 +107,16 @@ def run_pending_response() -> None:
         model_key, thread.get("id", "?"),
     )
 
-    # Stage 0 — input guardrail check
+    # Stage 0 — input guardrail check (skipped when guardrails are disabled)
+    from guardrails.llamaguard import GuardResult
     user_text = thread["messages"][-1]["content"] if thread.get("messages") else ""
-    input_guard = run_input_pipeline(user_text)
+    guardrails_on = st.session_state.get("guardrails_enabled", True)
+
+    if guardrails_on:
+        input_guard = run_input_pipeline(user_text)
+    else:
+        input_guard = GuardResult(blocked=False, pii_entities=[], latency_ms=0.0, stages=[])
+
     if input_guard.blocked:
         log_call(
             model_id=config.model_id,
@@ -220,11 +227,14 @@ def run_pending_response() -> None:
         model_key, latency_ms,
     )
 
-    # Output guardrail check
-    output_guard = run_output_pipeline(full_response)
-    if output_guard.blocked:
-        logger.info("run_pending_response | output BLOCKED | reason=%s", output_guard.reason)
-        full_response = CANNED_OUTPUT_REFUSAL
+    # Output guardrail check (skipped when guardrails are disabled)
+    if guardrails_on:
+        output_guard = run_output_pipeline(full_response)
+        if output_guard.blocked:
+            logger.info("run_pending_response | output BLOCKED | reason=%s", output_guard.reason)
+            full_response = CANNED_OUTPUT_REFUSAL
+    else:
+        output_guard = GuardResult(blocked=False, latency_ms=0.0, stages=[])
 
     # Compute costs
     input_cost, output_cost = compute_cost(

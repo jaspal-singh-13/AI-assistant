@@ -35,6 +35,170 @@ make eval
 
 ---
 
+## OSS Model Server (GPU inference)
+
+Two options for fast Qwen inference. **Option A (Modal)** is recommended — no local GPU required.
+
+---
+
+### Option A — Modal (recommended)
+
+[Modal](https://modal.com) runs the model on a cloud A10G GPU and gives you a public HTTPS endpoint.
+Cold-start is ~60–90s; subsequent requests are fast (~30–50 tokens/s).
+
+#### Prerequisites
+
+- A Modal account at [modal.com](https://modal.com) (free tier works)
+- Your Modal token ID and secret (found at [modal.com/settings/tokens](https://modal.com/settings/tokens))
+
+#### Step 1 — Install Modal and authenticate
+
+```bash
+pip install "modal>=0.73"
+
+modal token set \
+  --token-id <your-token-id> \
+  --token-secret <your-token-secret>
+```
+
+The token is saved to `~/.modal.toml`. You only need to do this once per machine.
+
+Alternatively, add the credentials to `.env` and they will be picked up automatically:
+
+```env
+MODAL_TOKEN_ID=ak-xxxxx
+MODAL_TOKEN_SECRET=as-xxxxx
+```
+
+#### Step 2 — Deploy the model server
+
+```bash
+# On Windows, set UTF-8 first to avoid encoding errors in Modal's CLI output
+chcp 65001        # Windows only
+set PYTHONUTF8=1  # Windows only
+
+modal deploy serve/modal_server.py
+```
+
+Expected output:
+```
+✓ Created objects.
+└── 🔨 Created web function serve =>
+    https://<your-workspace>--qwen-serve-serve.modal.run
+✓ App deployed in 6s! 🎉
+```
+
+The first deploy builds the container image (installs vLLM + CUDA deps) — this takes **3–5 minutes** once.
+Subsequent deploys reuse the cached image and finish in ~10s.
+
+#### Step 3 — Set `OSS_SERVE_URL` in `.env`
+
+Copy the URL printed above and add `/v1` to the end:
+
+```env
+OSS_SERVE_URL=https://<your-workspace>--qwen-serve-serve.modal.run/v1
+```
+
+#### Step 4 — Start Streamlit
+
+```bash
+python -m streamlit run app/streamlit_app.py
+```
+
+Streamlit routes all Qwen calls to Modal automatically. No second terminal needed.
+
+#### Verify the endpoint is alive
+
+```bash
+curl https://<your-workspace>--qwen-serve-serve.modal.run/health
+# → {"status":"ok","model":"Qwen/Qwen2.5-7B-Instruct","quant":"..."}
+# (first request triggers a cold-start — wait ~90s)
+```
+
+#### Re-deploy after code changes
+
+```bash
+modal deploy serve/modal_server.py
+```
+
+#### Stop / tear down
+
+```bash
+modal app stop qwen-serve      # stops running containers (billing stops)
+modal app delete qwen-serve    # deletes the app entirely
+```
+
+The `hf-cache` Modal Volume persists model weights so re-deploys don't re-download the 15 GB model.
+
+---
+
+### Option B — Local GPU
+
+By default, Qwen runs locally on CPU — slow (~2–5 tokens/s for the 7B model).
+To use your GPU, start the FastAPI model server in a separate terminal **before** launching Streamlit.
+
+#### Step 1 — Configure `.env`
+
+```env
+# URL the Streamlit app will call for OSS inference
+OSS_SERVE_URL=http://localhost:8000/v1
+
+# Quantization mode — pick based on your VRAM
+OSS_QUANT=4bit    # ~4 GB VRAM  (recommended for most consumer GPUs)
+# OSS_QUANT=8bit  # ~8 GB VRAM  (better quality, more memory)
+# OSS_QUANT=16bit # ~14 GB VRAM (full float16, best quality)
+```
+
+| `OSS_QUANT` | VRAM needed (7B model) | Notes |
+|---|---|---|
+| `4bit` | ~4 GB | Double-quant BnB; barely noticeable quality drop for chat |
+| `8bit` | ~8 GB | Good balance of quality and memory |
+| `16bit` | ~14 GB | Full `float16`, best quality |
+
+#### Step 2 — Start the model server
+
+```bash
+# Terminal 1 — loads model once, stays running
+python serve/model_server.py
+```
+
+You'll see:
+```
+[model_server] Loading Qwen/Qwen2.5-7B-Instruct in 4bit mode …
+[model_server] Model ready in 42.3s  (quant=4bit)
+INFO:     Uvicorn running on http://0.0.0.0:8000
+```
+
+Check the server is alive:
+```bash
+curl http://localhost:8000/health
+# → {"status":"ok","model":"Qwen/Qwen2.5-7B-Instruct","quant":"4bit","device":"cuda:0"}
+```
+
+#### Step 3 — Start Streamlit as normal
+
+```bash
+# Terminal 2
+python -m streamlit run app/streamlit_app.py
+```
+
+Streamlit will now route all Qwen calls to `http://localhost:8000/v1/chat/completions` instead of running inference in-process.
+
+#### Fallback behaviour
+
+If `OSS_SERVE_URL` is **not set** (or left blank) in `.env`, the app falls back to the original local CPU inference automatically — no code change needed.
+
+#### Custom model or port
+
+```env
+OSS_MODEL_NAME=Qwen/Qwen2.5-3B-Instruct   # swap to a smaller model
+OSS_HOST=0.0.0.0                           # bind host (default 0.0.0.0)
+OSS_PORT=9000                              # bind port (default 8000)
+OSS_SERVE_URL=http://localhost:9000/v1     # must match port above
+```
+
+---
+
 ## Architecture
 
 ```
@@ -85,7 +249,8 @@ Observability logger → logs/calls.jsonl
 | Judge debiasing | Position swap — run every comparison twice | Eliminates largest source of LLM judge noise |
 | Input guard order | Rebuff (5ms) → LlamaGuard (300ms) → Presidio (local) | Cheapest check first |
 | OSS hosting | HF Spaces CPU free tier | Free, public URL, meets assignment requirement |
-|| OSS tool calling | HF Router via ChatOpenAI client (router.huggingface.co/v1) | ChatHuggingFace + HuggingFaceEndpoint does not propagate tool schemas correctly so the model outputs raw JSON text instead of structured tool_calls. The HF Router exposes an OpenAI-compatible API that fixes this while still running Llama on HF infrastructure with the same HF_TOKEN. No OpenAI account needed. |
+| OSS tool calling | HF Router via ChatOpenAI client (router.huggingface.co/v1) | ChatHuggingFace + HuggingFaceEndpoint does not propagate tool schemas correctly so the model outputs raw JSON text instead of structured tool_calls. The HF Router exposes an OpenAI-compatible API that fixes this while still running Llama on HF infrastructure with the same HF_TOKEN. No OpenAI account needed. |
+| Local GPU inference | FastAPI server (`serve/model_server.py`) with OpenAI-compatible API | Decouples model loading from the Streamlit process; `ChatOpenAI(base_url=...)` gives native LangChain streaming with no custom wrapper; `bitsandbytes` quantization keeps VRAM usage configurable (4 / 8 / 16-bit) |
 
 ---
 
@@ -106,15 +271,16 @@ Scores for both models are written to `evaluation/results/model_scores.json` aft
 ## Tradeoffs
 
 - **Sync vs async streaming:** Using sync `graph.stream()` blocks the Streamlit thread ~2–5s per response. Acceptable for a demo; async SSE would be better for production.
-- **Qwen 2.5 0.5B on CPU:** ~8–12s per call on HF Spaces free tier. Shows a loading spinner. GPU tier would reduce this to ~1–2s but costs money.
-- **LlamaGuard 3 via HF Inference API:** ~300ms latency. Using a local model would be faster but requires GPU memory.
+- **Qwen on CPU (default):** ~2–5 tokens/s for the 7B model without the GPU server. Use `serve/model_server.py` with `OSS_QUANT=4bit` to get ~20–50 tokens/s on a consumer GPU.
+- **Two-process setup for GPU inference:** The FastAPI server is a separate process from Streamlit. This adds operational complexity (two terminals to start) but keeps the Streamlit process free of GPU memory and avoids model reloads on Streamlit hot-reloads.
+- **LlamaGuard 3 via HF Inference API:** ~300ms latency. Toggle "Safety guardrails" off in the sidebar to skip it for faster responses.
 - **Incremental summarisation:** Slightly stale summaries possible (only updates when a full window of messages goes uncovered). Acceptable tradeoff for cost savings.
 
 ---
 
 ## What I Would Improve With More Time
 
-1. **Async streaming** with a FastAPI SSE layer for true token-by-token display.
+1. **Async streaming** — the GPU server already emits SSE; wiring async consumption into Streamlit would remove the sync-blocking tradeoff.
 2. **Persistent Langfuse** traces with a dedicated project per eval run.
 3. **Fine-tuning Qwen** on a domain-specific dataset to close the quality gap.
 4. **Multi-user support** with proper auth and per-user thread isolation.
@@ -136,16 +302,21 @@ _TODO — populate after Phase 3 observability is live._
 
 ## Environment Variables
 
-| Variable | Required | Source |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | console.anthropic.com |
-| `HUGGINGFACE_TOKEN` | Yes | huggingface.co/settings/tokens |
-| `LANGFUSE_PUBLIC_KEY` | Yes | cloud.langfuse.com |
-| `LANGFUSE_SECRET_KEY` | Yes | cloud.langfuse.com |
-| `LANGFUSE_BASE_URL` | Yes | `https://us.cloud.langfuse.com` |
-| `LANGSMITH_API_KEY` | Yes | smith.langchain.com |
-| `LANGSMITH_TRACING` | Yes | `true` |
-| `LANGSMITH_PROJECT` | Yes | your project name |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ANTHROPIC_API_KEY` | Yes | — | console.anthropic.com |
+| `HF_TOKEN` | Yes | — | huggingface.co/settings/tokens |
+| `LANGFUSE_PUBLIC_KEY` | Yes | — | cloud.langfuse.com |
+| `LANGFUSE_SECRET_KEY` | Yes | — | cloud.langfuse.com |
+| `LANGFUSE_BASE_URL` | Yes | — | `https://us.cloud.langfuse.com` |
+| `LANGSMITH_API_KEY` | Yes | — | smith.langchain.com |
+| `LANGSMITH_TRACING` | Yes | — | `true` |
+| `LANGSMITH_PROJECT` | Yes | — | your project name |
+| `OSS_SERVE_URL` | No | _(CPU fallback)_ | URL of the FastAPI GPU server, e.g. `http://localhost:8000/v1` |
+| `OSS_QUANT` | No | `16bit` | Quantization mode for the GPU server: `4bit` / `8bit` / `16bit` |
+| `OSS_MODEL_NAME` | No | `Qwen/Qwen2.5-7B-Instruct` | HuggingFace repo to load in the GPU server |
+| `OSS_HOST` | No | `0.0.0.0` | Bind host for the GPU server |
+| `OSS_PORT` | No | `8000` | Bind port for the GPU server |
 
 ---
 

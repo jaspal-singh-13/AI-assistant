@@ -3,7 +3,8 @@
 Usage:
   python evaluation/run_eval.py [--seed 42] [--models claude-sonnet qwen-0.5b]
                                 [--workers 3] [--skip-judge] [--skip-benchmarks]
-                                [--prompt-category all]
+                                [--prompt-category all] [--light]
+                                [--prompt-ids factual_001 adversarial_003 ...]
 
 FR-EVL-06 + NFR-REP-02 (--seed for reproducibility).
 """
@@ -20,6 +21,11 @@ from pathlib import Path
 
 # Ensure project root is on sys.path when run directly
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from observability.logger import configure_logging, get_logger
+
+configure_logging()
+logger = get_logger(__name__)
 
 _CACHE_FILE = Path(__file__).parent / "results" / "_partial_cache.json"
 
@@ -55,6 +61,17 @@ def parse_args() -> argparse.Namespace:
         default=3,
         help="Number of prompts to process concurrently (default: 3)",
     )
+    parser.add_argument(
+        "--light",
+        action="store_true",
+        help="Light mode: keep only 3 prompts per category (9 total). Ideal for quick smoke-tests.",
+    )
+    parser.add_argument(
+        "--prompt-ids",
+        nargs="*",
+        default=None,
+        help="Run only specific prompt IDs (space-separated). Overrides --light and --prompt-category.",
+    )
     return parser.parse_args()
 
 
@@ -74,13 +91,14 @@ def _save_cache(cache: dict) -> None:
 
 def main() -> None:
     args = parse_args()
-    print(f"Seed: {args.seed} | Models: {args.models} | Workers: {args.workers}")
+    logger.info("=== eval pipeline start | seed=%d models=%s workers=%d light=%s ===",
+                args.seed, args.models, args.workers, args.light)
 
     from evaluation.framework import EvalFramework, EvalResult
 
     framework = EvalFramework()
 
-    print("Loading prompts...")
+    logger.info("load_prompts | start")
     all_prompts = framework.load_prompts()
 
     if args.prompt_category != "all":
@@ -89,7 +107,24 @@ def main() -> None:
     if args.skip_benchmarks:
         all_prompts = [p for p in all_prompts if p.get("benchmark") is None and p.get("source") is None]
 
-    print(f"Loaded {len(all_prompts)} prompts.")
+    if args.light:
+        import random
+        from collections import defaultdict
+        rng = random.Random(args.seed)
+        by_category: dict[str, list] = defaultdict(list)
+        for p in all_prompts:
+            by_category[p.get("category", "unknown")].append(p)
+        all_prompts = []
+        for cat, prompts in sorted(by_category.items()):
+            rng.shuffle(prompts)
+            all_prompts.extend(prompts[:3])
+
+    logger.info("load_prompts | done | n=%d%s", len(all_prompts), " [light]" if args.light else "")
+
+    if args.prompt_ids:
+        id_set = set(args.prompt_ids)
+        all_prompts = [p for p in all_prompts if p.get("id") in id_set]
+        logger.info("load_prompts | filtered by --prompt-ids | n=%d", len(all_prompts))
 
     cache = _load_cache()
     all_scores: list[EvalResult] = []
@@ -112,17 +147,15 @@ def main() -> None:
                     all_scores.append(EvalResult(**s))
                 if cached.get("comparative"):
                     comparatives.append(cached["comparative"])
-                print(f"  [{idx+1}/{total}] {pid} (cached)")
+                logger.debug("prompt | cached | [%d/%d] %s", idx + 1, total, pid)
                 return
 
-        print(f"  [{idx+1}/{total}] {pid}")
+        logger.info("prompt | [%d/%d] %s", idx + 1, total, pid)
 
         try:
             claude_result, qwen_result = framework.run_both_models(prompt, qwen_lock)
-        except Exception as exc:
-            import traceback
-            print(f"    run_both_models failed: {exc!r}")
-            traceback.print_exc()
+        except Exception:
+            logger.error("run_both_models | failed | pid=%s", pid, exc_info=True)
             return
 
         prompt_scores: list[EvalResult] = []
@@ -134,9 +167,10 @@ def main() -> None:
                 scores = framework.score_with_deepeval(result["response_text"], prompt)
                 for s in scores:
                     s.model_id = model_id
+                logger.debug("deepeval | ok | model=%s pid=%s scores=%d", model_id, pid, len(scores))
                 return scores
-            except Exception as exc:
-                print(f"    deepeval failed for {model_id}: {exc}")
+            except Exception:
+                logger.warning("deepeval | failed | model=%s pid=%s", model_id, pid, exc_info=True)
                 return []
 
         with ThreadPoolExecutor(max_workers=2) as ex:
@@ -154,8 +188,9 @@ def main() -> None:
                     claude_result["model_id"],
                     qwen_result["model_id"],
                 )
-            except Exception as exc:
-                print(f"    judge failed: {exc}")
+                logger.debug("judge | ok | pid=%s low_confidence=%s", pid, comparative.get("low_confidence"))
+            except Exception:
+                logger.warning("judge | failed | pid=%s", pid, exc_info=True)
 
         with results_lock:
             all_scores.extend(prompt_scores)
@@ -167,15 +202,18 @@ def main() -> None:
             }
             _save_cache(cache)
 
+    logger.info("processing %d prompts with %d workers", len(all_prompts), args.workers)
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         futs = {ex.submit(_process_prompt, i, p): i for i, p in enumerate(all_prompts)}
         for fut in as_completed(futs):
             exc = fut.exception()
             if exc:
-                print(f"  prompt worker raised: {exc!r}")
+                logger.error("prompt worker raised: %r", exc)
 
-    print("Aggregating results...")
+    logger.info("aggregate | start | total_scores=%d comparatives=%d",
+                len(all_scores), len(comparatives))
     framework.aggregate(all_scores)
+    logger.info("aggregate | done | summary.csv + model_scores.json written")
 
     # Write comparative.csv
     if comparatives:
@@ -186,21 +224,23 @@ def main() -> None:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(comparatives)
+        logger.info("comparative.csv written | rows=%d", len(comparatives))
 
-    print("Generating charts...")
+    logger.info("charts | generating")
     try:
         framework.report()
-    except Exception as exc:
-        print(f"  chart generation failed (non-fatal): {exc}")
+        logger.info("charts | done")
+    except Exception:
+        logger.warning("charts | generation failed (non-fatal)", exc_info=True)
 
     # Sync to LangSmith if configured
     try:
         from evaluation.langsmith_sync import sync_scores_to_langsmith
         sync_scores_to_langsmith(all_scores)
-    except Exception as exc:
-        print(f"  LangSmith sync failed (non-fatal): {exc}")
+    except Exception:
+        logger.warning("LangSmith sync failed (non-fatal)", exc_info=True)
 
-    print("Evaluation complete. Results written to evaluation/results/")
+    logger.info("=== eval pipeline done | results written to evaluation/results/ ===")
 
     # Clean up partial cache on success
     if _CACHE_FILE.exists():

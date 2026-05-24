@@ -29,6 +29,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from observability.logger import get_logger
+
+logger = get_logger(__name__)
+
 RESULTS_DIR = Path(__file__).parent / "results"
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
@@ -63,6 +67,7 @@ class EvalFramework:
 
         for json_file in sorted(PROMPTS_DIR.glob("*.json")):
             items = json.loads(json_file.read_text(encoding="utf-8"))
+            logger.debug("load_prompts | file=%s n=%d", json_file.name, len(items))
             prompts.extend(items)
 
         # Load benchmark samples from cache (skip download if not cached)
@@ -74,8 +79,10 @@ class EvalFramework:
                 for item in items:
                     item.setdefault("category", name)
                     item.setdefault("source", name)
+                logger.debug("load_prompts | benchmark=%s n=%d", name, len(items))
                 prompts.extend(items)
 
+        logger.info("load_prompts | total=%d", len(prompts))
         return prompts
 
     def run_both_models(self, prompt: dict, qwen_lock: "threading.Lock | None" = None) -> tuple[dict, dict]:
@@ -98,11 +105,13 @@ class EvalFramework:
             config = get_model(key)
             with _agent_cache_lock:
                 if key not in _agent_cache:
+                    logger.debug("run_both_models | build agent | model=%s", key)
                     llm = build_llm(key)
                     _agent_cache[key] = (llm, create_agent(llm, tools))
                 llm, graph = _agent_cache[key]
 
             messages = [{"role": "user", "content": prompt.get("prompt", "")}]
+            logger.debug("run_both_models | invoke | model=%s pid=%s", key, prompt.get("id"))
 
             if config.model_type == "oss" and qwen_lock is not None:
                 with qwen_lock:
@@ -114,6 +123,8 @@ class EvalFramework:
                 response_text, _ = run_agent(graph, messages)
                 latency_ms = int((time.monotonic() - t0) * 1000)
 
+            logger.info("run_both_models | done | model=%s pid=%s latency_ms=%d",
+                        key, prompt.get("id"), latency_ms)
             return {
                 "model_id": key,
                 "response_text": response_text,
@@ -196,6 +207,7 @@ class EvalFramework:
           - results/summary.csv
           - results/model_scores.json
         """
+        logger.info("aggregate | n_scores=%d", len(all_scores))
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
         summary_path = RESULTS_DIR / "summary.csv"
@@ -222,6 +234,8 @@ class EvalFramework:
             json.dumps(model_scores, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        logger.info("aggregate | wrote summary.csv + model_scores.json | models=%s",
+                    list(model_scores.get("models", {}).keys()))
 
     def report(self) -> None:
         """Generate bar_chart.png and radar_chart.png."""

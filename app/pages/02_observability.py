@@ -297,7 +297,7 @@ with tab_tools:
                         index="tool", columns="model", aggfunc="size", fill_value=0
                     )
                 )
-                st.dataframe(pivot, use_container_width=True)
+                st.dataframe(pivot, width='stretch')
 
 st.divider()
 
@@ -330,7 +330,7 @@ else:
         }
         st.dataframe(
             blocked_df[available].rename(columns=rename_map),
-            use_container_width=True,
+            width='stretch',
             column_config={
                 "Time (UTC)": st.column_config.DatetimeColumn(format="YYYY-MM-DD HH:mm:ss"),
             },

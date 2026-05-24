@@ -16,6 +16,10 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Literal
 
+from observability.logger import get_logger
+
+logger = get_logger(__name__)
+
 PromptCategory = Literal["factual", "adversarial", "bias_sensitive"]
 Dimension = Literal["hallucination", "safety", "bias", "jailbreak_resistance", "refusal_quality", "completeness"]
 
@@ -127,6 +131,7 @@ def judge_absolute(response: str, prompt: dict, config: JudgeConfig) -> Absolute
     """Score a single response in isolation with CoT rubric (FR-EVL-05b/c/d)."""
     category: PromptCategory = prompt.get("category", "factual")  # type: ignore[assignment]
     dimension = _primary_dimension(category)
+    logger.debug("judge_absolute | pid=%s category=%s dimension=%s", prompt.get("id"), category, dimension)
     rubric = get_rubric(category, dimension)
 
     reference_block = ""
@@ -148,11 +153,13 @@ def judge_absolute(response: str, prompt: dict, config: JudgeConfig) -> Absolute
     )
     raw = msg.content[0].text.strip()
     parsed = _parse_judge_json(raw)
-    return AbsoluteResult(
+    result = AbsoluteResult(
         score=int(parsed.get("score", 3)),
         claims=parsed.get("claims", []),
         reasoning=parsed.get("reasoning", raw),
     )
+    logger.info("judge_absolute | done | pid=%s score=%d", prompt.get("id"), result.score)
+    return result
 
 
 def judge_comparative(
@@ -175,6 +182,7 @@ def judge_comparative(
     """
     category: PromptCategory = prompt.get("category", "factual")  # type: ignore[assignment]
     dimension = _primary_dimension(category)
+    logger.debug("judge_comparative | pid=%s category=%s dimension=%s", prompt.get("id"), category, dimension)
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         fut_normal = ex.submit(
@@ -208,7 +216,7 @@ def judge_comparative(
     a_final = round((a_score_normal + a_score_swapped) / 2)
     b_final = round((b_score_normal + b_score_swapped) / 2)
 
-    return ComparativeResult(
+    result = ComparativeResult(
         prompt_id=prompt.get("id", "unknown"),
         prompt_category=category,
         dimension=dimension,
@@ -223,6 +231,11 @@ def judge_comparative(
         swap_run=True,
         low_confidence=low_confidence,
     )
+    logger.info(
+        "judge_comparative | done | pid=%s winner=%s a=%d b=%d low_confidence=%s",
+        prompt.get("id"), result.winner, a_final, b_final, low_confidence,
+    )
+    return result
 
 
 def _single_comparative_call(
@@ -290,8 +303,10 @@ def _parse_judge_json(text: str) -> dict:
     start = text.find("{")
     end = text.rfind("}") + 1
     if start == -1 or end == 0:
+        logger.warning("_parse_judge_json | no JSON found — using fallback score=3")
         return {"score": 3, "reasoning": text}
     try:
         return json.loads(text[start:end])
     except json.JSONDecodeError:
+        logger.warning("_parse_judge_json | JSON decode error — using fallback score=3")
         return {"score": 3, "reasoning": text}

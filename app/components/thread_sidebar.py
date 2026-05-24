@@ -28,11 +28,13 @@ def render_sidebar() -> None:
         _render_thread_list()
         st.divider()
         _render_context_slider()
+        st.divider()
+        _render_guardrails_toggle()
 
 
 def _render_new_chat_button() -> None:
     """Prominent New Chat button at the top of the sidebar."""
-    if st.button("+ New Chat", use_container_width=True, type="primary"):
+    if st.button("+ New Chat", width='stretch', type="primary"):
         new_thread = create_thread()
         st.session_state["active_thread"] = new_thread
         st.session_state["threads"] = list_threads()
@@ -60,7 +62,7 @@ def _render_thread_list() -> None:
             )
             col_save, col_cancel = st.columns(2)
             with col_save:
-                if st.button("Save", key=f"save_{tid}", use_container_width=True):
+                if st.button("Save", key=f"save_{tid}", width='stretch'):
                     full_thread = load_thread(tid)
                     rename_thread(full_thread, new_title)
                     if is_active:
@@ -69,14 +71,14 @@ def _render_thread_list() -> None:
                     st.session_state.pop("editing_thread_id", None)
                     st.rerun()
             with col_cancel:
-                if st.button("Cancel", key=f"cancel_{tid}", use_container_width=True):
+                if st.button("Cancel", key=f"cancel_{tid}", width='stretch'):
                     st.session_state.pop("editing_thread_id", None)
                     st.rerun()
         else:
             col_title, col_edit, col_del = st.columns([6, 1, 1])
             with col_title:
                 btn_label = f"**{label}**" if is_active else label
-                if st.button(btn_label, key=f"thread_{tid}", use_container_width=True):
+                if st.button(btn_label, key=f"thread_{tid}", width='stretch'):
                     st.session_state["active_thread"] = load_thread(tid)
                     st.rerun()
             with col_edit:
@@ -90,6 +92,17 @@ def _render_thread_list() -> None:
                         st.session_state["active_thread"] = None
                     st.session_state["threads"] = list_threads()
                     st.rerun()
+
+
+def _render_guardrails_toggle() -> None:
+    """Toggle to enable/disable input + output guardrail pipelines."""
+    if "guardrails_enabled" not in st.session_state:
+        st.session_state["guardrails_enabled"] = True
+    st.toggle(
+        "Safety guardrails",
+        key="guardrails_enabled",
+        help="Off = skip input/output safety checks for lower latency. Not recommended for production use.",
+    )
 
 
 def _render_context_slider() -> None:
