@@ -4,8 +4,8 @@
 models:
   - type: main
     engine: langchain
-    model: ChatAnthropic
     parameters:
+      model_name: ChatAnthropic
       model: claude-haiku-4-5-20251001
 
 rails:
