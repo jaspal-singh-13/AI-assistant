@@ -54,3 +54,20 @@ define bot refuse jailbreak
 define flow check jailbreak
   user ask jailbreak
   bot refuse jailbreak
+
+# ──────────────────────────────────────────────────────────────────────────────
+
+define user ask off topic
+  "tell me a joke"
+  "write me a poem"
+  "what is the weather today"
+  "who won the game last night"
+  "recommend a movie"
+  "sing me a song"
+
+define bot refuse off topic
+  "I'm here to help with questions and information. Please ask something I can assist with."
+
+define flow check off topic
+  user ask off topic
+  bot refuse off topic
