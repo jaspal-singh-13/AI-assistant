@@ -220,6 +220,6 @@ else:
 
     if rows:
         score_df = pd.DataFrame(rows).set_index("Model")
-        st.dataframe(score_df, width=None)
+        st.dataframe(score_df, use_container_width=True)
 
     st.page_link("pages/03_evaluation.py", label="→ Full Evaluation", icon="🔬")
