@@ -8,6 +8,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- Updated README: version badge to `0.11.5`, corrected guardrail stage counts (4-stage input, 3-stage output), expanded project tree (added `system_prompt.py`, `nemo_client.py`, `presidio_modal.py`, `nemo_modal.py`), expanded env vars table (added `MODELS_*`, `DEFAULT_MODEL_KEY`, `LANGSMITH_ENDPOINT`, `PRESIDIO_SERVE_URL`, `NEMO_SERVE_URL`), replaced architecture diagram with improved version showing inference tier, memory node, and evaluation pipeline
+- Added `make dev` target — starts local GPU model server as a detached subprocess then launches Streamlit (no Docker required)
+- Added `make install-cloud` target — installs slim `requirements.txt` without GPU or eval stack
+- Added `OSS_MODEL_NAME`, `OSS_HOST`, `OSS_PORT` to `.env.example`
+
 ## [0.11.5] — 2026-05-25
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 **Claude Haiku vs Qwen 2.5 7B** — a side-by-side chat application with shared tools, conversation memory, safety guardrails, real-time observability, and a full automated evaluation suite.
 
-![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![Version](https://img.shields.io/badge/version-0.9.0-green) ![LangGraph](https://img.shields.io/badge/agent-LangGraph-orange)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![Version](https://img.shields.io/badge/version-0.11.5-green) ![LangGraph](https://img.shields.io/badge/agent-LangGraph-orange)
 
 ---
 
@@ -11,8 +11,8 @@
 - **Dual-model chat** — switch between Claude Haiku (frontier) and Qwen 2.5 7B (OSS) mid-conversation; each message shows its model badge, token count, and cost
 - **LangGraph ReAct agent** — both models share the same tool-calling graph: current time, weather (wttr.in), web search (DuckDuckGo), observability summary, and evaluation summary; a system prompt guides the agent on when to call each tool
 - **Persistent thread memory** — JSON-backed threads with a sliding context window and incremental summary-of-summary so the LLM never re-reads the full history
-- **3-stage input guardrails** — heuristic injection detection (~1 ms) → content safety classifier (Claude Haiku as judge, S1–S13 harm categories) → Presidio PII detection
-- **2-stage output guardrails** — heuristic toxic-language / topic validators → content safety re-check on the assistant response; toggle off in the sidebar for faster responses
+- **4-stage input guardrails** — heuristic injection detection (~1 ms) → content safety classifier (Claude Haiku as judge, S1–S13 harm categories) → Presidio PII detection (Modal NER or regex fallback) → NeMo declarative rails (optional, Modal); toggle off in the sidebar for faster responses
+- **3-stage output guardrails** — heuristic toxic-language / topic validators → content safety re-check on the assistant response → NeMo rails (optional); toggle off in the sidebar for faster responses
 - **Real-time observability dashboard** — cost per call, cumulative cost, latency histogram, token breakdown (input vs output), tool usage, and a safety log; all read from `logs/calls.jsonl`
 - **Langfuse + LangSmith tracing** — every LLM call and tool step is traced; scores are synced back to LangSmith after each eval run
 - **Full evaluation suite** — DeepEval metrics (Hallucination, Bias, Toxicity, Jailbreak, Refusal), LLM-as-judge with position-swap debiasing, HuggingFace benchmarks (TruthfulQA, BBQ, AdvGLUE), and Promptfoo red-teaming; all runnable from the CLI or from the in-app Evaluation page
@@ -64,53 +64,79 @@ The app works with only `ANTHROPIC_API_KEY` and `HF_TOKEN` set. Tracing and eval
 
 ```mermaid
 flowchart TD
-    User([User]) --> StreamlitUI
+    User([User]) --> UI
 
-    subgraph StreamlitUI [Streamlit UI]
-        Dash[Dashboard page]
-        Chat[Chat page]
-        Obs[Observability page]
-        Eval[Evaluation page]
+    subgraph UI [Streamlit UI]
+        Dash[Dashboard]
+        Chat[01_chat]
+        Obs[02_observability]
+        Eval[03_evaluation]
     end
 
-    Chat --> InputGuard
+    Chat --> IG
 
-    subgraph InputGuard [Input Guardrails]
-        I1[Injection detection ~1ms]
-        I2[Content classifier Claude Haiku]
-        I3[Presidio PII detection]
-        I1 --> I2 --> I3
+    subgraph IG [Input Guardrails]
+        I1["① Injection regex (~1 ms)"]
+        I2["② LlamaGuard S1-S13\n(Claude Haiku)"]
+        I3["③ Presidio PII\n(Modal NER or regex fallback)"]
+        I4["④ NeMo rails\n(optional, Modal)"]
+        I1 --> I2 --> I3 --> I4
     end
 
-    InputGuard -->|blocked| CannedRefusal[Canned refusal + log]
-    InputGuard -->|pass| Agent
+    IG -->|blocked| Refuse[Canned refusal + log]
+    IG -->|pass| Agent
 
     subgraph Agent [LangGraph ReAct Agent]
-        LLM[LLM frontier or OSS]
-        Tools[Tools: time / weather / search / metrics]
-        Memory[Sliding window + summary]
-        LLM --> Tools --> LLM
+        LLM[LLM node]
+        ToolNode["Tools: time · weather · search · obs · eval"]
+        Mem["Memory: sliding window + summary"]
+        LLM --> ToolNode --> LLM
+        Mem -.- LLM
     end
 
-    Agent --> OutputGuard
-
-    subgraph OutputGuard [Output Guardrails]
-        O1[Heuristic validators]
-        O2[Content re-check Claude Haiku]
-        O1 --> O2
+    subgraph Inference [Model Inference]
+        Claude["Claude Haiku\n(Anthropic API)"]
+        ModalVLLM["Qwen 2.5-7B\n(Modal vLLM, A10G)"]
+        LocalGPU["Qwen 2.5-7B\n(Local FastAPI + bitsandbytes)"]
+        CPUFallback["Qwen 0.5B\n(CPU, transformers)"]
     end
 
-    OutputGuard --> Logger
+    LLM -->|frontier| Claude
+    LLM -->|"OSS, cloud"| ModalVLLM
+    LLM -->|"OSS, local GPU"| LocalGPU
+    LLM -->|"OSS, no GPU"| CPUFallback
 
-    subgraph Logger [Observability]
+    Agent --> OG
+
+    subgraph OG [Output Guardrails]
+        O1["① Heuristic validators\n(toxic / PII / topic)"]
+        O2["② LlamaGuard re-check"]
+        O3["③ NeMo rails (optional)"]
+        O1 --> O2 --> O3
+    end
+
+    OG --> LogSys
+
+    subgraph LogSys [Observability]
         JSONL[logs/calls.jsonl]
-        AppLog[logs/app.log]
-        Langfuse[Langfuse traces]
-        LangSmith[LangSmith traces]
+        LF[Langfuse traces]
+        LS[LangSmith traces]
     end
 
-    Logger --> Chat
     JSONL --> Obs
+    JSONL --> Dash
+
+    subgraph EvalSuite [Evaluation Suite]
+        Prompts["45 custom prompts\n(factual / adversarial / bias)"]
+        Bench["HF benchmarks\n(TruthfulQA / BBQ / AdvGLUE)"]
+        Metrics["DeepEval + LLM judge\n(position-swap debiasing)"]
+        Scores[model_scores.json + charts]
+        Prompts & Bench --> Metrics --> Scores
+    end
+
+    Eval --> EvalSuite
+    Scores --> Dash
+    Scores --> LS
 ```
 
 ---
@@ -135,6 +161,7 @@ AI-assistant/
 ├── agent/
 │   ├── models.py                 # Model registry, build_llm() (Anthropic / OpenAI-compat)
 │   ├── factory.py                # create_agent(), stream_events(), stream_and_collect()
+│   ├── system_prompt.py          # SYSTEM_PROMPT constant injected into every LLM context
 │   └── local_llm.py              # CPU fallback: LocalTransformersChatModel
 │
 ├── memory/
@@ -152,9 +179,10 @@ AI-assistant/
 │
 ├── guardrails/
 │   ├── llamaguard.py             # classify() → GuardResult with S1–S13 harm categories
-│   ├── input_guard.py            # run_input_pipeline() 3-stage
-│   ├── output_guard.py           # run_output_pipeline() 2-stage
+│   ├── input_guard.py            # run_input_pipeline() 4-stage
+│   ├── output_guard.py           # run_output_pipeline() 3-stage
 │   ├── validators.py             # ToxicLanguage, DetectPII, RestrictToTopic (heuristic)
+│   ├── nemo_client.py            # HTTP client to NEMO_SERVE_URL (/check_input, /check_output)
 │   └── nemo/                     # NeMo Guardrails declarative config (identity, jailbreak)
 │
 ├── observability/
@@ -176,12 +204,14 @@ AI-assistant/
 │
 ├── serve/
 │   ├── model_server.py           # Local FastAPI OpenAI-compatible GPU server
-│   └── modal_server.py           # Modal vLLM deployment (A10G, no local GPU needed)
+│   ├── modal_server.py           # Modal vLLM deployment (A10G, no local GPU needed)
+│   ├── presidio_modal.py         # Modal CPU Presidio PII service (/detect)
+│   └── nemo_modal.py             # Modal NeMo Guardrails service (/check_input, /check_output)
 │
 ├── deployment/hf_spaces/         # Gradio app for HuggingFace Spaces (Qwen 2.5 0.5B)
 ├── config/pricing_fallback.json  # Static LiteLLM pricing fallback
 ├── logs/                         # calls.jsonl, app.log (gitignored except .gitkeep)
-├── tests/                        # pytest suite — 71 tests, 0 failures
+├── tests/                        # pytest suite — ~86 tests, 0 failures
 ├── Dockerfile                    # CUDA 12.1 image for both services
 ├── docker-compose.yml            # model-server + streamlit services
 ├── Makefile                      # All project tasks (see Makefile Targets below)
@@ -364,18 +394,23 @@ Streamlit waits for the model-server health check before starting. HuggingFace w
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | — | [console.anthropic.com](https://console.anthropic.com) |
 | `HF_TOKEN` | Yes | — | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
+| `MODELS_<key>` | No | see `.env.example` | Model registry entry: `model_id\|label\|type` (type = `frontier` or `oss`) |
+| `DEFAULT_MODEL_KEY` | No | `claude-haiku` | Which model key is pre-selected in the UI |
 | `LANGFUSE_PUBLIC_KEY` | For tracing | — | [cloud.langfuse.com](https://cloud.langfuse.com) |
 | `LANGFUSE_SECRET_KEY` | For tracing | — | cloud.langfuse.com |
 | `LANGFUSE_BASE_URL` | For tracing | — | e.g. `https://us.cloud.langfuse.com` |
 | `LANGSMITH_API_KEY` | For tracing | — | [smith.langchain.com](https://smith.langchain.com) |
 | `LANGSMITH_TRACING` | For tracing | — | `true` |
+| `LANGSMITH_ENDPOINT` | For tracing | — | LangSmith API endpoint URL |
 | `LANGSMITH_PROJECT` | For tracing | — | Your LangSmith project name |
 | `DEEPEVAL_JUDGE_MODEL` | For eval | `claude-haiku-4-5-20251001` | Anthropic model used as DeepEval judge |
 | `OSS_SERVE_URL` | No | _(CPU fallback)_ | URL of the GPU model server, e.g. `http://localhost:8000/v1` |
-| `OSS_QUANT` | No | `16bit` | Quantization for local server: `4bit` / `8bit` / `16bit` |
+| `OSS_QUANT` | No | `4bit` | Quantization for local server: `4bit` / `8bit` / `16bit` |
 | `OSS_MODEL_NAME` | No | `Qwen/Qwen2.5-7B-Instruct` | HuggingFace repo to load |
 | `OSS_HOST` | No | `0.0.0.0` | Bind host for the local GPU server |
 | `OSS_PORT` | No | `8000` | Bind port for the local GPU server |
+| `PRESIDIO_SERVE_URL` | No | _(regex fallback)_ | URL of the Modal Presidio PII service |
+| `NEMO_SERVE_URL` | No | _(NeMo skipped)_ | URL of the Modal NeMo Guardrails service |
 | `MODAL_TOKEN_ID` | For Modal | — | Modal token ID |
 | `MODAL_TOKEN_SECRET` | For Modal | — | Modal token secret |
 
@@ -409,13 +444,15 @@ modal deploy serve/nemo_modal.py
 
 ```bash
 make run           # Start the Streamlit app (http://localhost:8501)
-make serve         # Start the local FastAPI GPU model server
+make dev           # Run Streamlit locally without Docker (no model server; uses CPU fallback or OSS_SERVE_URL; hot-reloads on save)
+make serve         # Start the local FastAPI GPU model server only
 make modal-deploy  # Deploy Qwen to Modal (cloud A10G GPU)
 make eval          # Run full evaluation suite
 make eval-light    # Quick 9-prompt smoke test
 make promptfoo     # Run Promptfoo red-team eval
 make deploy-hf     # Push Gradio app to HuggingFace Spaces (requires HF_SPACE=owner/space-name)
 make install       # pip install -r requirements-local.txt + spaCy en_core_web_lg
+make install-cloud # pip install -r requirements.txt (slim, no GPU/eval stack)
 make lint          # ruff check .
 make test          # pytest tests/ -v
 make docker        # Build image and start both containers (docker compose up)
