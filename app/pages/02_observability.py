@@ -79,12 +79,14 @@ def _load_df(models: list[str], tail: int) -> pd.DataFrame:
     df.reset_index(drop=True, inplace=True)
     if models:
         df = df[df["model_id"].isin(models)]
-    # keep last *tail* rows per model so the slider works correctly
+    # keep last *tail* rows per model so the slider works correctly.
+    # Use groupby().tail() directly — groupby().apply() drops the grouping
+    # column on pandas >= 2.2, which breaks downstream df["model_id"] access.
     df = (
         df.groupby("model_id", group_keys=False)
-        .apply(lambda g: g.tail(tail))
-        .reset_index(drop=True)
+        .tail(tail)
         .sort_values("timestamp")
+        .reset_index(drop=True)
     )
     return df
 

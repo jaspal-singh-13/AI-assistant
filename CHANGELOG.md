@@ -11,6 +11,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - `agent/system_prompt.py` — rewrote `SYSTEM_PROMPT` into a two-layer in-app tour guide: Layer 1 App map (pages 1–4 + processes A–M with one-line briefs) + Layer 2 step-by-step walkthroughs (3–6 numbered steps each for all 13 processes); added proactive-help rules so the agent volunteers the App map on "how do I" / "I'm lost" / "help" cues and sends only the walkthrough the user picks
 
+## [0.12.2] — 2026-05-25
+
+### Fixed
+- `app/pages/02_observability.py` `_load_df()` — replaced `df.groupby("model_id").apply(lambda g: g.tail(tail))` with `df.groupby("model_id").tail(tail)`. On pandas ≥ 2.2 (the version installed on Streamlit Cloud), `DataFrameGroupBy.apply` now excludes the grouping column from the result by default, which was stripping `model_id` from the returned frame and causing `KeyError: 'model_id'` at the per-model breakdown step (the global summary cards rendered first, then the page crashed at `df["model_id"].unique()`). `groupby().tail(n)` is purpose-built for this and preserves all columns.
+
 ## [0.12.1] — 2026-05-25
 
 ### Fixed
