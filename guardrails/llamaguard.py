@@ -55,6 +55,10 @@ class GuardResult:
     latency_ms: float = 0.0
     stages: list = field(default_factory=list)
     """Per-stage breakdown: [{"name": str, "passed": bool, "latency_ms": float, "detail": str|None}]"""
+    input_tokens: int = 0
+    """Input tokens consumed by the LlamaGuard (Claude Haiku) classify() call."""
+    output_tokens: int = 0
+    """Output tokens consumed by the LlamaGuard (Claude Haiku) classify() call."""
 
 
 # Maps category codes → readable names
@@ -105,6 +109,9 @@ def classify(text: str, role: str = "user") -> GuardResult:
         return GuardResult(blocked=False, reason="guard_error")
     latency_ms = (time.perf_counter() - t0) * 1000
 
+    in_tok = getattr(msg.usage, "input_tokens", 0)
+    out_tok = getattr(msg.usage, "output_tokens", 0)
+
     if result_text.startswith("unsafe"):
         parts = result_text.split("\n")
         raw_code = parts[1].strip().upper() if len(parts) > 1 else "UNKNOWN"
@@ -112,7 +119,10 @@ def classify(text: str, role: str = "user") -> GuardResult:
         category = CATEGORY_MAP.get(code, code)
         reason = f"{code}_{'_'.join(category.split())}"
         logger.info("classify | UNSAFE | role=%s category=%s latency_ms=%.0f", role, category, latency_ms)
-        return GuardResult(blocked=True, reason=reason, category=category, latency_ms=latency_ms)
+        return GuardResult(
+            blocked=True, reason=reason, category=category,
+            latency_ms=latency_ms, input_tokens=in_tok, output_tokens=out_tok,
+        )
 
     logger.info("classify | safe | role=%s latency_ms=%.0f", role, latency_ms)
-    return GuardResult(blocked=False, latency_ms=latency_ms)
+    return GuardResult(blocked=False, latency_ms=latency_ms, input_tokens=in_tok, output_tokens=out_tok)

@@ -8,6 +8,23 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-05-25
+
+### Added
+- `observability/pricing.py` — `MODAL_A10G_PER_SECOND_USD = 0.000306` and `MODAL_CPU_PER_SECOND_USD = 0.0000131 × 0.125` constants for the three Modal services (Qwen GPU, NeMo CPU, Presidio CPU)
+- `observability/pricing.py` — `compute_guardrail_cost(input_guard, output_guard, pricing)` helper that sums Claude Haiku token cost (LlamaGuard) plus Modal CPU wall-clock cost (NeMo, Presidio) for both guardrail pipelines in a single call
+- `guardrails/llamaguard.py` `GuardResult` — `input_tokens` and `output_tokens` fields; populated from `msg.usage` on every `classify()` call
+- `observability/logger.py` `log_call()` — `guardrail_cost_usd` field; `llm_cost_usd` field; `total_cost_usd` now equals `llm_cost + guardrail_cost`
+- `config/pricing_fallback.json` — `Qwen/Qwen2.5-7B-Instruct` entry with derived per-token rates (`$0.00000153` input, `$0.00000765` output) based on Modal A10G rate and measured throughput
+- `app/components/guardrail_panel.py` — `💰 Guardrail cost` line at the bottom of each message's guardrail expander
+- `app/pages/02_observability.py` — `LLM cost` and `Guardrail cost` split metrics in summary row and per-model cards; Cost tab replaced with stacked area chart showing LLM vs guardrail cost split
+
+### Changed
+- `observability/pricing.py` `compute_cost` OSS branch — now uses `(latency_ms / 1000) × MODAL_A10G_PER_SECOND_USD` instead of the (wrong) HF CPU hourly rate
+- Removed `HF_SPACES_CPU_HOURLY_USD` and old `MODAL_GPU_PER_SECOND_USD` (was A100-40GB rate, incorrect for A10G)
+- `app/components/stream_handler.py` — computes and passes `guardrail_cost_usd` on both the blocked and normal response paths
+- `tests/test_guardrails.py` — all `classify()` tests updated to mock `anthropic.Anthropic` (was `requests.post` against a stale HF API design)
+
 ## [0.10.0] — 2026-05-25
 
 ### Added

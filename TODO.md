@@ -108,7 +108,8 @@
 ### observability/pricing.py
 [x] `hours_since_fetch()` — 1 test passing
 [x] `fetch_pricing()` — GET LiteLLM JSON, 24hr cache in session state, fallback on error — 1 test passing
-[x] `compute_cost()` — frontier: LiteLLM per-token prices; OSS: `(latency_ms/3_600_000) × $0.03` — 2 tests passing
+[x] `compute_cost()` — frontier: LiteLLM per-token prices; OSS: Modal A10G `(latency_ms/1000) × $0.000306` — 2 tests passing
+[x] `compute_guardrail_cost()` — Claude Haiku token cost (LlamaGuard) + Modal CPU latency cost (NeMo, Presidio) — 2 tests passing
 
 ### observability/langfuse_query.py
 [x] `get_langfuse_handler()` — return CallbackHandler or None if keys missing
@@ -116,7 +117,7 @@
 
 ### guardrails/llamaguard.py
 [x] `CATEGORY_MAP` (S1–S13) — 1 test passing
-[x] `classify(text, role)` — HF Inference API call, parse "safe"/"unsafe\nS{N}" response — 2 tests passing
+[x] `classify(text, role)` — Anthropic Claude Haiku API call, parse "safe"/"unsafe\nS{N}" response; captures `msg.usage` into `GuardResult.input_tokens`/`output_tokens` — 4 tests passing
 
 ### guardrails/input_guard.py
 [x] `message_hash()` — SHA-256 helper — 1 test passing
@@ -151,8 +152,8 @@
 [x] Readability overhaul — sidebar filters, global summary banner, per-model cards with badges, tabbed charts (Cost · Latency · Tokens · Tools), latency histogram, tool usage chart, safety log formatting, raw-log download
 
 ### tests/
-[x] `tests/test_guardrails.py` — 10 tests passing
-[x] `tests/test_observability.py` — 10 tests passing (all pricing and cost tests green)
+[x] `tests/test_guardrails.py` — 13 tests passing (updated mocks from HF to Anthropic; added token count assertions)
+[x] `tests/test_observability.py` — 17 tests passing (added guardrail cost tests, llm/guardrail split in total_cost)
 
 > Gate met — 2026-05-23
 

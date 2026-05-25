@@ -95,6 +95,7 @@ def log_call(
     latency_ms: float,
     pricing_source: str,
     pricing_fetched_at: str,
+    guardrail_cost_usd: float = 0.0,
     guardrail_blocked: bool = False,
     block_layer: str | None = None,
     block_reason: str | None = None,
@@ -108,12 +109,13 @@ def log_call(
 
     All cost fields are computed by the caller (observability.pricing).
     PII must be redacted before calling this function (NFR-PRV-01).
-
-    TODO (Phase 3): implement file write.
+    guardrail_cost_usd covers LlamaGuard (Claude Haiku tokens) + NeMo/Presidio
+    (Modal CPU wall-clock) for both input and output pipelines.
     """
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
-    total_cost = input_cost_usd + output_cost_usd
+    llm_cost = input_cost_usd + output_cost_usd
+    total_cost = llm_cost + guardrail_cost_usd
     total_tokens = input_tokens + output_tokens
     cost_per_1k = (total_cost / total_tokens * 1000) if total_tokens > 0 else 0.0
 
@@ -125,6 +127,8 @@ def log_call(
         "output_tokens": output_tokens,
         "input_cost_usd": round(input_cost_usd, 8),
         "output_cost_usd": round(output_cost_usd, 8),
+        "llm_cost_usd": round(llm_cost, 8),
+        "guardrail_cost_usd": round(guardrail_cost_usd, 8),
         "total_cost_usd": round(total_cost, 8),
         "cost_per_1k_tokens": round(cost_per_1k, 6),
         "latency_ms": round(latency_ms, 2),

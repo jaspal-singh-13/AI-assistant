@@ -10,6 +10,10 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from guardrails.llamaguard import GuardResult
 
 LITELLM_PRICING_URL = (
     "https://raw.githubusercontent.com/BerriAI/litellm/main/"
@@ -18,9 +22,12 @@ LITELLM_PRICING_URL = (
 FALLBACK_PATH = Path(__file__).parent.parent / "config" / "pricing_fallback.json"
 CACHE_TTL_SECONDS = 86_400  # 24 hours
 
-# OSS equivalent compute rates
-HF_SPACES_CPU_HOURLY_USD = 0.03
-MODAL_GPU_PER_SECOND_USD = 0.000583
+# Modal compute rates (confirmed from modal.com/pricing, May 2026)
+MODAL_A10G_PER_SECOND_USD = 0.000306        # A10G GPU — Qwen inference server
+MODAL_CPU_PER_SECOND_USD = 0.0000131 * 0.125  # CPU @ default 0.125 cores — NeMo, Presidio
+
+# Stage names that map to Modal CPU services
+_MODAL_CPU_STAGES = {"NeMo Guardrails", "Presidio PII"}
 
 
 def fetch_pricing(force: bool = False) -> tuple[dict, str, str]:
@@ -61,16 +68,46 @@ def compute_cost(
     Return (input_cost_usd, output_cost_usd).
 
     For 'frontier': uses LiteLLM pricing JSON.
-    For 'oss': returns equivalent compute cost (never NA — FR-OBS-04).
+    For 'oss': Modal A10G wall-clock cost (never NA — FR-OBS-04).
     """
     if model_type == "oss":
-        equiv = (latency_ms / 3_600_000) * HF_SPACES_CPU_HOURLY_USD
+        equiv = (latency_ms / 1_000) * MODAL_A10G_PER_SECOND_USD
         return 0.0, equiv
 
     entry = pricing.get(model_id, {})
     input_price = entry.get("input_cost_per_token", 0.0)
     output_price = entry.get("output_cost_per_token", 0.0)
     return input_tokens * input_price, output_tokens * output_price
+
+
+def compute_guardrail_cost(
+    input_guard: GuardResult,
+    output_guard: GuardResult,
+    pricing: dict,
+) -> float:
+    """
+    Return total USD cost for all guardrail services in one conversation turn.
+
+    Cost components:
+    - LlamaGuard calls: Claude Haiku token-based pricing (tokens on GuardResult).
+    - NeMo Guardrails:  Modal CPU wall-clock cost (from stage latency_ms).
+    - Presidio PII:     Modal CPU wall-clock cost (from stage latency_ms).
+    - Injection check:  local regex, free.
+
+    Note: NeMo makes an internal Anthropic call we cannot observe; the NeMo
+    figure here covers only the Modal CPU container cost (a known lower bound).
+    """
+    haiku = pricing.get("claude-haiku-4-5-20251001", {})
+    in_price = haiku.get("input_cost_per_token", 0.0)
+    out_price = haiku.get("output_cost_per_token", 0.0)
+
+    total = 0.0
+    for guard in (input_guard, output_guard):
+        total += guard.input_tokens * in_price + guard.output_tokens * out_price
+        for stage in guard.stages:
+            if stage["name"] in _MODAL_CPU_STAGES:
+                total += (stage["latency_ms"] / 1_000) * MODAL_CPU_PER_SECOND_USD
+    return total
 
 
 def hours_since_fetch(fetched_at_iso: str) -> float:

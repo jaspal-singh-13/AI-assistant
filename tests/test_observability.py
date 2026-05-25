@@ -59,7 +59,7 @@ class TestCallLogger:
                 assert "timestamp" in record
 
     def test_log_call_computes_total_cost(self, tmp_path):
-        """total_cost_usd = input_cost + output_cost."""
+        """total_cost_usd = llm_cost + guardrail_cost (no guardrail → same as llm_cost)."""
         from observability.logger import log_call
         log_path = tmp_path / "calls.jsonl"
         with patch("observability.logger.LOGS_DIR", tmp_path):
@@ -76,6 +76,8 @@ class TestCallLogger:
                     pricing_fetched_at="2026-05-22T00:00:00+00:00",
                 )
                 record = json.loads(log_path.read_text().strip())
+                assert abs(record["llm_cost_usd"] - 0.0105) < 1e-8
+                assert abs(record["guardrail_cost_usd"] - 0.0) < 1e-8
                 assert abs(record["total_cost_usd"] - 0.0105) < 1e-8
 
     def test_log_call_blocked_stores_hash_not_content(self, tmp_path):
@@ -193,18 +195,85 @@ class TestPricing:
         assert result > 0
 
     def test_oss_cost_never_na(self):
-        """compute_cost for OSS model returns (0.0, positive_float), never (0, 0)."""
-        from observability.pricing import compute_cost
+        """compute_cost for OSS model returns (0.0, positive_float) using Modal A10G rate."""
+        from observability.pricing import compute_cost, MODAL_A10G_PER_SECOND_USD
+        latency_ms = 5000.0
         input_cost, output_cost = compute_cost(
-            model_id="qwen/qwen2.5-0.5b",
+            model_id="Qwen/Qwen2.5-7B-Instruct",
             input_tokens=100,
             output_tokens=50,
             pricing={},
             model_type="oss",
-            latency_ms=5000.0,
+            latency_ms=latency_ms,
         )
         assert input_cost == 0.0
-        assert output_cost > 0.0
+        expected = (latency_ms / 1_000) * MODAL_A10G_PER_SECOND_USD
+        assert abs(output_cost - expected) < 1e-10
+
+    def test_compute_guardrail_cost_llamaguard_tokens(self):
+        """compute_guardrail_cost charges Claude Haiku token rates for LlamaGuard calls."""
+        from guardrails.llamaguard import GuardResult
+        from observability.pricing import compute_guardrail_cost
+
+        pricing = {
+            "claude-haiku-4-5-20251001": {
+                "input_cost_per_token": 0.0000008,
+                "output_cost_per_token": 0.000004,
+            }
+        }
+        input_guard = GuardResult(blocked=False, latency_ms=300.0, stages=[], input_tokens=50, output_tokens=3)
+        output_guard = GuardResult(blocked=False, latency_ms=280.0, stages=[], input_tokens=48, output_tokens=2)
+
+        cost = compute_guardrail_cost(input_guard, output_guard, pricing)
+        expected = (50 + 48) * 0.0000008 + (3 + 2) * 0.000004
+        assert abs(cost - expected) < 1e-10
+
+    def test_compute_guardrail_cost_nemo_presidio_cpu(self):
+        """compute_guardrail_cost adds Modal CPU cost for NeMo and Presidio stages."""
+        from guardrails.llamaguard import GuardResult
+        from observability.pricing import compute_guardrail_cost, MODAL_CPU_PER_SECOND_USD
+
+        pricing = {"claude-haiku-4-5-20251001": {"input_cost_per_token": 0.0, "output_cost_per_token": 0.0}}
+
+        nemo_latency = 200.0   # ms
+        presidio_latency = 30.0  # ms
+        input_guard = GuardResult(
+            blocked=False, latency_ms=250.0,
+            stages=[
+                {"name": "NeMo Guardrails", "passed": True, "latency_ms": nemo_latency, "skipped": False},
+                {"name": "Presidio PII", "passed": True, "latency_ms": presidio_latency, "skipped": False},
+            ],
+        )
+        output_guard = GuardResult(blocked=False, latency_ms=180.0, stages=[
+            {"name": "NeMo Guardrails", "passed": True, "latency_ms": nemo_latency, "skipped": False},
+        ])
+
+        cost = compute_guardrail_cost(input_guard, output_guard, pricing)
+        expected = (nemo_latency + presidio_latency + nemo_latency) / 1_000 * MODAL_CPU_PER_SECOND_USD
+        assert abs(cost - expected) < 1e-12
+
+    def test_log_call_total_includes_guardrail_cost(self, tmp_path):
+        """total_cost_usd = llm_cost + guardrail_cost_usd when guardrail_cost_usd is provided."""
+        from observability.logger import log_call
+        log_path = tmp_path / "calls.jsonl"
+        with patch("observability.logger.LOGS_DIR", tmp_path):
+            with patch("observability.logger.CALLS_LOG", log_path):
+                log_call(
+                    model_id="test-model",
+                    model_type="frontier",
+                    input_tokens=1000,
+                    output_tokens=500,
+                    input_cost_usd=0.003,
+                    output_cost_usd=0.0075,
+                    guardrail_cost_usd=0.0005,
+                    latency_ms=500.0,
+                    pricing_source="fallback",
+                    pricing_fetched_at="2026-05-22T00:00:00+00:00",
+                )
+                record = json.loads(log_path.read_text().strip())
+                assert abs(record["llm_cost_usd"] - 0.0105) < 1e-8
+                assert abs(record["guardrail_cost_usd"] - 0.0005) < 1e-8
+                assert abs(record["total_cost_usd"] - 0.011) < 1e-8
 
     def test_frontier_cost_uses_litellm_prices(self):
         """compute_cost for frontier model multiplies token counts by per-token prices."""

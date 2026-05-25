@@ -83,7 +83,7 @@ def run_pending_response() -> None:
     from memory.manager import append_message, get_llm_context, list_threads
     from observability.langfuse_query import build_run_config
     from observability.logger import log_call
-    from observability.pricing import compute_cost, fetch_pricing
+    from observability.pricing import compute_cost, compute_guardrail_cost, fetch_pricing
 
     config = get_model(model_key)
     lc_messages = get_llm_context(thread)
@@ -119,6 +119,8 @@ def run_pending_response() -> None:
         input_guard = GuardResult(blocked=False, pii_entities=[], latency_ms=0.0, stages=[])
 
     if input_guard.blocked:
+        _empty_guard = GuardResult(blocked=False, latency_ms=0.0, stages=[])
+        guardrail_cost = compute_guardrail_cost(input_guard, _empty_guard, pricing_data)
         log_call(
             model_id=config.model_id,
             model_type=config.model_type,
@@ -129,6 +131,7 @@ def run_pending_response() -> None:
             latency_ms=input_guard.latency_ms,
             pricing_source=pricing_source,
             pricing_fetched_at=pricing_fetched_at,
+            guardrail_cost_usd=guardrail_cost,
             guardrail_blocked=True,
             block_layer="input",
             block_reason=input_guard.reason,
@@ -153,6 +156,7 @@ def run_pending_response() -> None:
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cost_usd": 0.0,
+                "guardrail_cost_usd": round(guardrail_cost, 8),
                 "input_guard": {
                     "blocked": True,
                     "reason": input_guard.reason,
@@ -252,6 +256,7 @@ def run_pending_response() -> None:
         model_type=config.model_type,
         latency_ms=latency_ms,
     )
+    guardrail_cost = compute_guardrail_cost(input_guard, output_guard, pricing_data)
 
     log_call(
         model_id=config.model_id,
@@ -263,6 +268,7 @@ def run_pending_response() -> None:
         latency_ms=latency_ms,
         pricing_source=pricing_source,
         pricing_fetched_at=pricing_fetched_at,
+        guardrail_cost_usd=guardrail_cost,
         guardrail_blocked=output_guard.blocked,
         block_layer="output" if output_guard.blocked else None,
         block_reason=output_guard.reason if output_guard.blocked else None,
@@ -283,6 +289,7 @@ def run_pending_response() -> None:
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0.0,
+            "guardrail_cost_usd": round(guardrail_cost, 8),
             "input_guard": {
                 "blocked": False,
                 "reason": None,

@@ -12,6 +12,17 @@ from __future__ import annotations
 import streamlit as st
 
 
+def _fmt_cost(usd: float) -> str:
+    """Human-readable cost string matching the observability dashboard format."""
+    if usd == 0:
+        return "$0.00"
+    if usd < 0.0001:
+        return f"${usd * 1_000_000:.2f} μ$"
+    if usd < 0.01:
+        return f"${usd * 1000:.3f} m$"
+    return f"${usd:.4f}"
+
+
 def render_guardrail_panel(metadata: dict) -> None:
     """Render the collapsible guardrail panel for one assistant message."""
     ig = metadata.get("input_guard")
@@ -44,6 +55,10 @@ def render_guardrail_panel(metadata: dict) -> None:
             st.caption("  Not reached (input blocked)")
         else:
             _render_stages(og.get("stages", []))
+
+        guardrail_cost = metadata.get("guardrail_cost_usd")
+        if guardrail_cost is not None:
+            st.caption(f"  💰 Guardrail cost: {_fmt_cost(guardrail_cost)}")
 
 
 def _render_stages(stages: list[dict]) -> None:

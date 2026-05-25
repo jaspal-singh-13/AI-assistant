@@ -136,15 +136,17 @@ if df.empty:
 st.subheader("Summary — all selected models")
 total_calls = len(df)
 avg_latency = df["latency_ms"].mean()
-total_cost = df["total_cost_usd"].sum()
+llm_cost = df["llm_cost_usd"].sum() if "llm_cost_usd" in df.columns else df["total_cost_usd"].sum()
+guardrail_cost = df["guardrail_cost_usd"].sum() if "guardrail_cost_usd" in df.columns else 0.0
 blocked = df["guardrail_blocked"].sum() if "guardrail_blocked" in df.columns else 0
 block_rate = blocked / total_calls if total_calls else 0
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Total calls", f"{total_calls:,}")
 c2.metric("Avg latency", f"{avg_latency:,.0f} ms")
-c3.metric("Total cost", _fmt_cost(total_cost))
-c4.metric("Block rate", f"{block_rate:.1%}" if total_calls else "—")
+c3.metric("LLM cost", _fmt_cost(llm_cost))
+c4.metric("Guardrail cost", _fmt_cost(guardrail_cost))
+c5.metric("Block rate", f"{block_rate:.1%}" if total_calls else "—")
 
 st.divider()
 
@@ -161,7 +163,10 @@ for col, model in zip(model_cols, models_in_df):
         st.markdown(f"**{_short(model)}**  \n{badge}")
         st.metric("Calls", f"{len(mdf):,}")
         st.metric("Avg latency", f"{mdf['latency_ms'].mean():,.0f} ms")
-        st.metric("Total cost", _fmt_cost(mdf["total_cost_usd"].sum()))
+        m_llm_cost = mdf["llm_cost_usd"].sum() if "llm_cost_usd" in mdf.columns else mdf["total_cost_usd"].sum()
+        st.metric("LLM cost", _fmt_cost(m_llm_cost))
+        m_guard_cost = mdf["guardrail_cost_usd"].sum() if "guardrail_cost_usd" in mdf.columns else 0.0
+        st.metric("Guardrail cost", _fmt_cost(m_guard_cost))
         avg_1k = mdf["cost_per_1k_tokens"].mean()
         st.metric(
             "Cost / 1k tokens",
@@ -184,32 +189,48 @@ tab_cost, tab_latency, tab_tokens, tab_tools = st.tabs(
 with tab_cost:
     col_a, col_b = st.columns(2)
 
+    _has_split = "llm_cost_usd" in df.columns and "guardrail_cost_usd" in df.columns
+
     with col_a:
-        st.markdown("**Cost per call** *(by model)*")
-        cost_pivot = (
-            df.assign(call_idx=df.groupby("model_id").cumcount())
-            .pivot_table(
-                index="call_idx",
-                columns="model_id",
-                values="total_cost_usd",
-                aggfunc="mean",
+        if _has_split:
+            st.markdown("**LLM vs guardrail cost per call** *(stacked)*")
+            stacked_df = (
+                df.assign(call_idx=df.groupby("model_id").cumcount())
+                .groupby("call_idx")[["llm_cost_usd", "guardrail_cost_usd"]]
+                .mean()
+                .rename(columns={"llm_cost_usd": "LLM cost", "guardrail_cost_usd": "Guardrail cost"})
             )
-            .rename(columns=_short)
-        )
-        st.line_chart(cost_pivot, height=300)
+            st.area_chart(stacked_df, height=300)
+        else:
+            st.markdown("**Cost per call** *(by model)*")
+            cost_pivot = (
+                df.assign(call_idx=df.groupby("model_id").cumcount())
+                .pivot_table(
+                    index="call_idx",
+                    columns="model_id",
+                    values="total_cost_usd",
+                    aggfunc="mean",
+                )
+                .rename(columns=_short)
+            )
+            st.line_chart(cost_pivot, height=300)
 
     with col_b:
-        st.markdown("**Cumulative cost** *(all models)*")
+        st.markdown("**Cumulative cost** *(LLM vs guardrail)*")
         cum_df = pd.DataFrame(index=df.index)
-        for model in models_in_df:
-            mask = df["model_id"] == model
-            col_ser = (
-                df.loc[mask, "total_cost_usd"]
-                .cumsum()
-                .reindex(df.index, method="ffill")
-                .fillna(0)
-            )
-            cum_df[_short(model)] = col_ser
+        if _has_split:
+            cum_df["LLM cost"] = df["llm_cost_usd"].cumsum().values
+            cum_df["Guardrail cost"] = df["guardrail_cost_usd"].cumsum().values
+        else:
+            for model in models_in_df:
+                mask = df["model_id"] == model
+                col_ser = (
+                    df.loc[mask, "total_cost_usd"]
+                    .cumsum()
+                    .reindex(df.index, method="ffill")
+                    .fillna(0)
+                )
+                cum_df[_short(model)] = col_ser
         st.area_chart(cum_df, height=300)
 
 # ── Latency tab ───────────────────────────────────────────────────────────────
