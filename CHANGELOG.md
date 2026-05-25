@@ -8,6 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.5] — 2026-05-25
+
+### Fixed
+- `evaluation/framework.py` `_init_worker()` — installed a per-worker asyncio loop exception handler that silently absorbs the cosmetic `RuntimeError: Event loop is closed` emitted at teardown when httpx / anyio finalisers attempt to close async transports on a loop that has already been shut down (Anthropic / OpenAI / Langfuse SDKs all leak this noise during interpreter exit). Real exceptions during task execution still surface via `loop.default_exception_handler`. The handler is applied uniformly to all three eval `ThreadPoolExecutor`s (per-model in framework, deepeval scoring and outer per-prompt in run_eval)
+
 ## [0.11.4] — 2026-05-25
 
 ### Fixed

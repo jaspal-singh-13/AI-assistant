@@ -46,9 +46,23 @@ def _init_worker() -> None:
     """ThreadPoolExecutor initializer: give each worker thread its own asyncio
     event loop so LangGraph's internal async machinery doesn't share or reuse
     the main thread's loop (which causes 'Event loop is closed' across prompts).
+
+    Also installs a loop exception handler that silently absorbs the cosmetic
+    'Event loop is closed' RuntimeError emitted at teardown when httpx /
+    anyio finalisers try to close async transports on a loop that has already
+    been shut down. Real exceptions during task execution still surface.
     """
     import asyncio
-    asyncio.set_event_loop(asyncio.new_event_loop())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    def _quiet_shutdown(loop, context):
+        exc = context.get("exception")
+        if isinstance(exc, RuntimeError) and "Event loop is closed" in str(exc):
+            return
+        loop.default_exception_handler(context)
+
+    loop.set_exception_handler(_quiet_shutdown)
 
 
 @dataclass
