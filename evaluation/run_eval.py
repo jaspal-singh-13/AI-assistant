@@ -176,8 +176,11 @@ def main() -> None:
                     s.model_id = model_id
                 logger.debug("deepeval | ok | model=%s pid=%s scores=%d", model_id, pid, len(scores))
                 return scores
-            except Exception:
-                logger.warning("deepeval | failed | model=%s pid=%s", model_id, pid, exc_info=True)
+            except Exception as exc:
+                logger.warning(
+                    "deepeval | failed | model=%s pid=%s error=%s: %s",
+                    model_id, pid, type(exc).__name__, exc, exc_info=True,
+                )
                 return []
 
         from evaluation.framework import _init_worker

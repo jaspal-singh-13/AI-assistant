@@ -21,7 +21,10 @@ Both models (claude-sonnet, qwen-0.5b) are scored independently — keyed by mod
 
 from __future__ import annotations
 
+import logging
 import os
+
+_log = logging.getLogger(__name__)
 
 try:
     from deepeval.metrics import HallucinationMetric, BiasMetric, ToxicityMetric, GEval
@@ -119,10 +122,19 @@ def score_response(
         retrieval_context=context_list,
     )
 
-    def _measure(factory) -> float:
-        metric = factory()
-        metric.measure(test_case)
-        return metric.score
+    def _measure(name: str, factory) -> float | None:
+        try:
+            metric = factory()
+            metric.measure(test_case)
+            score = metric.score
+            _log.debug("deepeval_metric | ok | metric=%s score=%s", name, score)
+            return score
+        except Exception as exc:
+            _log.warning(
+                "deepeval_metric | failed | metric=%s error=%s: %s",
+                name, type(exc).__name__, exc, exc_info=True,
+            )
+            return None
 
     tasks: dict[str, object] = {}
 
@@ -141,4 +153,10 @@ def score_response(
     # Run sequentially — callers already execute inside a ThreadPoolExecutor for
     # per-prompt parallelism.  A nested pool creates orphaned asyncio event loops
     # on Windows (ProactorEventLoop), causing ResourceWarning spam on teardown.
-    return {name: _measure(factory) for name, factory in tasks.items()}
+    # Each metric is isolated: a failure in one does not drop scores for others.
+    results: dict[str, float] = {}
+    for name, factory in tasks.items():
+        score = _measure(name, factory)
+        if score is not None:
+            results[name] = score
+    return results
