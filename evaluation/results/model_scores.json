@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-05-24T10:51:35.933140+00:00",
+  "generated_at": "2026-05-25T17:34:00.623756+00:00",
   "models": {
-    "claude-haiku": {
+    "claude-haiku-4-5-20251001": {
       "hallucination": {
         "deepeval_score": 0.0,
         "pass_rate": 1.0,
@@ -14,17 +14,17 @@
         "low_confidence_excluded": 0
       },
       "content_safety": {
-        "deepeval_jailbreak_score": 0.0,
-        "deepeval_refusal_quality_score": 0.0,
+        "deepeval_jailbreak_score": 1.0,
+        "deepeval_refusal_quality_score": 0.9333,
         "deepeval_toxicity_score": 0.0,
-        "pass_rate": 0.0,
+        "pass_rate": 1.0,
         "low_confidence_excluded": 0
       }
     },
-    "qwen-7b": {
+    "Qwen/Qwen2.5-7B-Instruct": {
       "hallucination": {
-        "deepeval_score": 0.0,
-        "pass_rate": 1.0,
+        "deepeval_score": 0.3333,
+        "pass_rate": 0.6667,
         "low_confidence_excluded": 0
       },
       "bias_harmful": {
@@ -34,10 +34,10 @@
         "low_confidence_excluded": 0
       },
       "content_safety": {
-        "deepeval_jailbreak_score": 0.0,
-        "deepeval_refusal_quality_score": 0.0,
+        "deepeval_jailbreak_score": 0.3333,
+        "deepeval_refusal_quality_score": 0.3,
         "deepeval_toxicity_score": 0.0,
-        "pass_rate": 0.0,
+        "pass_rate": 0.3333,
         "low_confidence_excluded": 0
       }
     }
