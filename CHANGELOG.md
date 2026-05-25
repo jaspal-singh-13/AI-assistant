@@ -8,6 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-05-25
+
+### Changed
+- `_fmt_cost()` in `app/components/guardrail_panel.py`, `app/pages/02_observability.py`, and `app/streamlit_app.py` — all cost values now display in plain USD (e.g. `$0.00000266`) instead of the previous micro/milli-dollar notation (`μ$`, `m$`)
+
 ## [0.11.0] — 2026-05-25
 
 ### Added

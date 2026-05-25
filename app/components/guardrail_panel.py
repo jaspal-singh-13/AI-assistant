@@ -13,13 +13,15 @@ import streamlit as st
 
 
 def _fmt_cost(usd: float) -> str:
-    """Human-readable cost string matching the observability dashboard format."""
+    """Format a USD cost value, always displayed in USD regardless of magnitude."""
     if usd == 0:
         return "$0.00"
+    if usd < 0.000001:
+        return f"${usd:.10f}"
     if usd < 0.0001:
-        return f"${usd * 1_000_000:.2f} μ$"
+        return f"${usd:.8f}"
     if usd < 0.01:
-        return f"${usd * 1000:.3f} m$"
+        return f"${usd:.6f}"
     return f"${usd:.4f}"
 
 
