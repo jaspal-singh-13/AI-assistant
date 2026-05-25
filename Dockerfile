@@ -32,8 +32,8 @@ WORKDIR /app
 #   bitsandbytes>=0.46.1  # 0.49.2 tested …
 RUN pip install --no-cache-dir --upgrade pip uv
 
-COPY requirements.txt .
-RUN sed 's/[[:space:]]*#.*//' requirements.txt > /tmp/req_clean.txt \
+COPY requirements-local.txt .
+RUN sed 's/[[:space:]]*#.*//' requirements-local.txt > /tmp/req_clean.txt \
     && uv pip install --system --no-cache-dir -r /tmp/req_clean.txt
 
 # ── Application code ───────────────────────────────────────────────────────────

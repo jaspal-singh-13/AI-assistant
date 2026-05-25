@@ -130,6 +130,21 @@ class TestCallLogger:
         with patch("observability.logger.CALLS_LOG", tmp_path / "nonexistent.jsonl"):
             assert read_calls() == []
 
+    def test_read_calls_skips_records_missing_required_fields(self, tmp_path):
+        """read_calls() silently drops records that lack any REQUIRED_CALL_FIELDS field."""
+        from observability.logger import REQUIRED_CALL_FIELDS, read_calls
+        log_path = tmp_path / "calls.jsonl"
+        valid_record = {k: "x" for k in REQUIRED_CALL_FIELDS}
+        log_path.write_text(
+            '{"timestamp":"2026-01-01T00:00:00+00:00"}\n'
+            + json.dumps(valid_record) + "\n",
+            encoding="utf-8",
+        )
+        with patch("observability.logger.CALLS_LOG", log_path):
+            records = read_calls()
+        assert len(records) == 1
+        assert records[0]["model_id"] == "x"
+
 
 class TestAppLogger:
     def setup_method(self):

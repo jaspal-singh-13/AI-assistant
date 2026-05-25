@@ -32,6 +32,12 @@ LOGS_DIR = Path(__file__).parent.parent / "logs"
 CALLS_LOG = LOGS_DIR / "calls.jsonl"
 APP_LOG = LOGS_DIR / "app.log"
 
+REQUIRED_CALL_FIELDS: frozenset[str] = frozenset({
+    "timestamp", "model_id", "model_type",
+    "input_tokens", "output_tokens",
+    "llm_cost_usd", "total_cost_usd", "latency_ms",
+})
+
 
 def configure_logging(level: str = "INFO") -> None:
     """
@@ -160,7 +166,9 @@ def read_calls(model_id: str | None = None) -> list[dict]:
             continue
         try:
             record = json.loads(line)
-            if model_id is None or record.get("model_id") == model_id:
+            if not REQUIRED_CALL_FIELDS.issubset(record):
+                continue
+            if model_id is None or record["model_id"] == model_id:
                 records.append(record)
         except json.JSONDecodeError:
             continue

@@ -8,6 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.2] — 2026-05-25
+
+### Fixed
+- Added `REQUIRED_CALL_FIELDS` schema constant to `observability/logger.py` and enforced it in `read_calls()`, which now silently drops legacy JSONL records missing any required field — fixes `KeyError: 'model_id'` crash on the Streamlit Cloud observability page caused by old-schema records in `calls.jsonl`
+
 ## [0.11.1] — 2026-05-25
 
 ### Changed
