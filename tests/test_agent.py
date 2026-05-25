@@ -125,3 +125,30 @@ class TestAgentFactory:
         assert step is not None
         assert step["type"] == "response"
         assert step["content"] == "Here is your answer."
+
+
+class TestSystemPrompt:
+    def test_system_prompt_lists_all_four_pages(self):
+        """SYSTEM_PROMPT must mention all four app pages by name."""
+        from agent.system_prompt import SYSTEM_PROMPT
+        for page in ("Dashboard", "Chat", "Observability", "Evaluation"):
+            assert page in SYSTEM_PROMPT, f"Page '{page}' not found in SYSTEM_PROMPT"
+
+    def test_system_prompt_has_required_sections(self):
+        """SYSTEM_PROMPT must contain the App map, walkthroughs, proactive help, and tool sections."""
+        from agent.system_prompt import SYSTEM_PROMPT
+        for header in (
+            "APP MAP",
+            "STEP-BY-STEP WALKTHROUGHS",
+            "WHEN TO OFFER THE APP MAP PROACTIVELY",
+            "AVAILABLE TOOLS",
+        ):
+            assert header in SYSTEM_PROMPT, f"Section '{header}' not found in SYSTEM_PROMPT"
+
+    def test_system_prompt_covers_each_process(self):
+        """Every process letter A through M must have a Layer 2 walkthrough section."""
+        from agent.system_prompt import SYSTEM_PROMPT
+        import string
+        for letter in string.ascii_uppercase[:13]:  # A–M
+            marker = f"### {letter}."
+            assert marker in SYSTEM_PROMPT, f"Walkthrough '{marker}' not found in SYSTEM_PROMPT"

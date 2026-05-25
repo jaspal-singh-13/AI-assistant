@@ -237,6 +237,7 @@
 - [x] `tools/evaluation_tool.py` — `get_evaluation_summary(model_id)` read-only tool
 - [x] `tools/registry.py` — updated to use new tools; `get_metrics` removed
 - [x] `agent/system_prompt.py` — app-level `SYSTEM_PROMPT` with page/tool catalogue
+- [x] `agent/system_prompt.py` — expanded `SYSTEM_PROMPT` into two-layer app guide: Layer 1 App map (pages 1–4 + processes A–M) + Layer 2 step-by-step walkthroughs + proactive help rules
 - [x] `memory/manager.py:get_llm_context()` — injects `SYSTEM_PROMPT` as first `SystemMessage`
 - [x] `tests/test_tools.py` — `TestObservabilityTool` (4 tests) + `TestEvaluationTool` (3 tests); `TestMetricsTool` removed
 

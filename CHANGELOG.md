@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- `agent/system_prompt.py` — rewrote `SYSTEM_PROMPT` into a two-layer in-app tour guide: Layer 1 App map (pages 1–4 + processes A–M with one-line briefs) + Layer 2 step-by-step walkthroughs (3–6 numbered steps each for all 13 processes); added proactive-help rules so the agent volunteers the App map on "how do I" / "I'm lost" / "help" cues and sends only the walkthrough the user picks
+
+## [0.11.5] — 2026-05-25
+
+### Changed
 - Updated README: version badge to `0.11.5`, corrected guardrail stage counts (4-stage input, 3-stage output), expanded project tree (added `system_prompt.py`, `nemo_client.py`, `presidio_modal.py`, `nemo_modal.py`), expanded env vars table (added `MODELS_*`, `DEFAULT_MODEL_KEY`, `LANGSMITH_ENDPOINT`, `PRESIDIO_SERVE_URL`, `NEMO_SERVE_URL`), replaced architecture diagram with improved version showing inference tier, memory node, and evaluation pipeline
 - Added `make dev` target — starts local GPU model server as a detached subprocess then launches Streamlit (no Docker required)
 - Added `make install-cloud` target — installs slim `requirements.txt` without GPU or eval stack
