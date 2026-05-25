@@ -146,7 +146,7 @@ flowchart TD
 ```
 AI-assistant/
 ├── app/
-│   ├── streamlit_app.py          # Main entry point (Dashboard — home page)
+│   ├── dashboard.py          # Main entry point (Dashboard — home page)
 │   ├── components/
 │   │   ├── chat_window.py        # Message rendering, model badges, switch dividers
 │   │   ├── thread_sidebar.py     # Thread list, context/trigger sliders, safety toggle

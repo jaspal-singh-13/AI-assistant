@@ -21,10 +21,10 @@ help:
 	@echo "  docker-down   Stop and remove containers"
 
 run:
-	python -m streamlit run app/streamlit_app.py
-
+python -m streamlit run app/dashboard.py
+	
 dev:
-	python -m streamlit run app/streamlit_app.py --server.runOnSave true
+	python -m streamlit run app/dashboard.py --server.runOnSave true
 
 serve:
 	python serve/model_server.py
