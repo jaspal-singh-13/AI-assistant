@@ -8,7 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- `app/pages/01_chat.py` — `render_model_selector` crashed with `IndexError` when `list_models()` returned an empty list (no `MODELS_*` env vars on Streamlit Cloud); added empty-list guard that shows a warning and calls `st.stop()` before attempting `render_sidebar`/`render_chat`
+
 ### Changed
+- Renamed `app/streamlit_app.py` to `app/dashboard.py`; updated all references in `Makefile`, `docker-compose.yml`, `.devcontainer/devcontainer.json`, `README.md`, `TODO.md`, and `CHANGELOG.md`
 - `agent/system_prompt.py` — rewrote `SYSTEM_PROMPT` into a two-layer in-app tour guide: Layer 1 App map (pages 1–4 + processes A–M with one-line briefs) + Layer 2 step-by-step walkthroughs (3–6 numbered steps each for all 13 processes); added proactive-help rules so the agent volunteers the App map on "how do I" / "I'm lost" / "help" cues and sends only the walkthrough the user picks
 
 ## [0.12.2] — 2026-05-25

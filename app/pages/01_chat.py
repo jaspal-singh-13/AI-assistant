@@ -75,6 +75,9 @@ def init_session_state() -> None:
 def render_model_selector() -> None:
     """Render the model dropdown in the header (FR-MOD-01)."""
     models = list_models()
+    if not models:
+        st.warning("No models configured. Add MODELS_* entries to your environment secrets.")
+        return
     options = {config.model_label: key for key, config in models}
     current_key = st.session_state.get("model_key", DEFAULT_MODEL_KEY)
     current_label = next(
@@ -110,6 +113,9 @@ def main() -> None:
         st.title("AI Assistant Comparison")
     with col2:
         render_model_selector()
+
+    if not list_models():
+        st.stop()
 
     render_sidebar()
     render_chat()
