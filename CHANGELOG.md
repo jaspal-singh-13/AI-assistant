@@ -8,6 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.3] — 2026-05-25
+
+### Fixed
+- `evaluation/framework.py` `_run_one()` — renamed shadowing `config` local to `model_config`, added `run_config` dict carrying `model_id` (real API model name) and `configurable.thread_id` (prompt id), and passed it to both `run_agent()` call sites — fixes `model=unknown thread=?` in evaluation logs and ensures the real model name is consistent across all log lines and the returned result dict
+
 ## [0.11.2] — 2026-05-25
 
 ### Fixed

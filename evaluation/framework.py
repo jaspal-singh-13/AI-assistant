@@ -102,31 +102,36 @@ class EvalFramework:
 
         def _run_one(key: str) -> dict:
             from agent.models import get_model
-            config = get_model(key)
+            model_config = get_model(key)
+            prompt_id = prompt.get("id", "eval")
+            run_config = {
+                "model_id": model_config.model_id,
+                "configurable": {"thread_id": prompt_id},
+            }
             with _agent_cache_lock:
                 if key not in _agent_cache:
-                    logger.debug("run_both_models | build agent | model=%s", key)
+                    logger.debug("run_both_models | build agent | model=%s", model_config.model_id)
                     llm = build_llm(key)
                     _agent_cache[key] = (llm, create_agent(llm, tools))
                 llm, graph = _agent_cache[key]
 
             messages = [{"role": "user", "content": prompt.get("prompt", "")}]
-            logger.debug("run_both_models | invoke | model=%s pid=%s", key, prompt.get("id"))
+            logger.debug("run_both_models | invoke | model=%s pid=%s", model_config.model_id, prompt_id)
 
-            if config.model_type == "oss" and qwen_lock is not None:
+            if model_config.model_type == "oss" and qwen_lock is not None:
                 with qwen_lock:
                     t0 = time.monotonic()
-                    response_text, _ = run_agent(graph, messages)
+                    response_text, _ = run_agent(graph, messages, run_config)
                     latency_ms = int((time.monotonic() - t0) * 1000)
             else:
                 t0 = time.monotonic()
-                response_text, _ = run_agent(graph, messages)
+                response_text, _ = run_agent(graph, messages, run_config)
                 latency_ms = int((time.monotonic() - t0) * 1000)
 
             logger.info("run_both_models | done | model=%s pid=%s latency_ms=%d",
-                        key, prompt.get("id"), latency_ms)
+                        model_config.model_id, prompt_id, latency_ms)
             return {
-                "model_id": key,
+                "model_id": model_config.model_id,
                 "response_text": response_text,
                 "input_tokens": 0,
                 "output_tokens": 0,
