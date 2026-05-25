@@ -8,6 +8,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.4] — 2026-05-25
+
+### Fixed
+- `agent/factory.py` — removed module-level `nest_asyncio.apply()` global side effect; this asyncio patch is a Streamlit-specific concern owned by `app/pages/01_chat.py` and was leaking into the evaluation CLI, causing `RuntimeError: Event loop is closed` when LangGraph's internal async machinery ran inside `ThreadPoolExecutor` worker threads
+- `evaluation/framework.py` — added `_init_worker()` helper and passed it as the `initializer=` to the per-model `ThreadPoolExecutor`, so each worker thread receives a fresh `asyncio` event loop (canonical Python pattern for thread pools that use asyncio internally)
+- `evaluation/run_eval.py` — wired `_init_worker` into both the deepeval scoring pool and the outer per-prompt pool, so every evaluation worker thread has its own event loop and no two threads share or close each other's loop
+
+### Changed
+- `agent/factory.py` — Streamlit entry points (currently `app/pages/01_chat.py`) now solely own calling `nest_asyncio.apply()` before importing `agent.factory`; non-Streamlit consumers (eval CLI, tests) no longer have the global `asyncio` patch imposed on them by an unrelated module import
+
 ## [0.11.3] — 2026-05-25
 
 ### Fixed

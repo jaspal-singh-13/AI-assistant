@@ -42,6 +42,15 @@ _agent_cache: dict[str, tuple] = {}
 _agent_cache_lock = threading.Lock()
 
 
+def _init_worker() -> None:
+    """ThreadPoolExecutor initializer: give each worker thread its own asyncio
+    event loop so LangGraph's internal async machinery doesn't share or reuse
+    the main thread's loop (which causes 'Event loop is closed' across prompts).
+    """
+    import asyncio
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
+
 @dataclass
 class EvalResult:
     model_id: str
@@ -139,7 +148,10 @@ class EvalFramework:
             }
 
         model_keys = [key for key, _ in list_models()]
-        with ThreadPoolExecutor(max_workers=len(model_keys)) as ex:
+        with ThreadPoolExecutor(
+            max_workers=len(model_keys),
+            initializer=_init_worker,
+        ) as ex:
             futs = {key: ex.submit(_run_one, key) for key in model_keys}
         results = [futs[key].result() for key in model_keys]
 

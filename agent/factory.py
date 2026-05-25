@@ -18,9 +18,6 @@ if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
     from langgraph.graph.graph import CompiledGraph
 
-import nest_asyncio
-nest_asyncio.apply()  # enables async streaming from within Streamlit's event loop
-
 from observability.logger import get_logger, log_duration
 
 logger = get_logger(__name__)

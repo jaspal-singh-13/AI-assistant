@@ -180,7 +180,8 @@ def main() -> None:
                 logger.warning("deepeval | failed | model=%s pid=%s", model_id, pid, exc_info=True)
                 return []
 
-        with ThreadPoolExecutor(max_workers=2) as ex:
+        from evaluation.framework import _init_worker
+        with ThreadPoolExecutor(max_workers=2, initializer=_init_worker) as ex:
             score_futs = [ex.submit(_score_model, r) for r in (claude_result, qwen_result)]
         for fut in score_futs:
             prompt_scores.extend(fut.result())
@@ -210,7 +211,8 @@ def main() -> None:
             _save_cache(cache)
 
     logger.info("processing %d prompts with %d workers", len(all_prompts), args.workers)
-    with ThreadPoolExecutor(max_workers=args.workers) as ex:
+    from evaluation.framework import _init_worker
+    with ThreadPoolExecutor(max_workers=args.workers, initializer=_init_worker) as ex:
         futs = {ex.submit(_process_prompt, i, p): i for i, p in enumerate(all_prompts)}
         for fut in as_completed(futs):
             exc = fut.exception()
