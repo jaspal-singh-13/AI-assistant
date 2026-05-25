@@ -23,6 +23,8 @@
 [x] `create_agent(llm, tools)` → CompiledGraph via `create_react_agent`
 [x] `run_agent()` — `graph.stream()` loop, returns `(response_str, state_snapshot)`
 [x] `_parse_message_to_step()` — AIMessage / ToolMessage → step dict with `call_id`
+[x] `_parse_message_to_step()` — fan out parallel tool calls (one step per `msg.tool_calls[i]`)
+[x] `fold_tool_results()` — pair `tool_result` to `tool_call` by `call_id`, attach result, drop standalone results
 
 ### memory/manager.py
 [x] `get_context_label()` — dynamic slider label — 2 tests passing
@@ -73,6 +75,7 @@
 
 ### app/components/state_panel.py
 [x] Collapsible THINKING → TOOL CALL (args table, 80-char truncate) → RESPONDING panel
+[x] Skip legacy standalone `tool_result` rows when rendering so step numbering stays contiguous
 
 ### app/components/stream_handler.py
 [x] `handle_send()` — full pipeline: agent → log → save thread (guardrails wired in Phase 3)

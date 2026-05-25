@@ -238,6 +238,11 @@ def run_pending_response() -> None:
         model_key, latency_ms,
     )
 
+    # Collapse each tool_result into its matching tool_call so the reasoning
+    # panel shows one numbered row per tool invocation with args + result.
+    from agent.factory import fold_tool_results
+    snapshot = fold_tool_results(snapshot)
+
     # Output guardrail check (skipped when guardrails are disabled)
     if guardrails_on:
         output_guard = run_output_pipeline(full_response)

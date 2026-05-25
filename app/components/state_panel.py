@@ -21,7 +21,8 @@ def render_state_panel(state_snapshot: list[dict], metadata: dict) -> None:
         return
 
     model_label = metadata.get("model_label", "")
-    n_steps = len(state_snapshot)
+    visible_steps = [s for s in state_snapshot if s.get("type") != "tool_result"]
+    n_steps = len(visible_steps)
     total_latency = sum(s.get("latency_ms", 0) for s in state_snapshot)
 
     with st.expander(f"Agent reasoning  [{model_label}]  {n_steps} steps · {total_latency:.0f}ms"):
@@ -29,14 +30,20 @@ def render_state_panel(state_snapshot: list[dict], metadata: dict) -> None:
 
 
 def _render_steps(steps: list[dict]) -> None:
-    """Render each step in sequence."""
-    tool_steps = [s for s in steps if s.get("type") == "tool_call"]
+    """Render each step in sequence.
+
+    Legacy snapshots may still contain standalone "tool_result" entries (saved
+    before tool_result folding was introduced); skip them here so numbering
+    stays contiguous instead of jumping over silent rows.
+    """
+    visible = [s for s in steps if s.get("type") != "tool_result"]
+    tool_steps = [s for s in visible if s.get("type") == "tool_call"]
 
     if not tool_steps:
         st.caption("Direct response — no tools called")
         return
 
-    for i, step in enumerate(steps, start=1):
+    for i, step in enumerate(visible, start=1):
         step_type = step.get("type", "")
 
         if step_type == "thinking":

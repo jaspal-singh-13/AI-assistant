@@ -10831,3 +10831,13 @@ TypeError: 'Client' object does not support the context manager protocol
 2026-05-24T16:41:14Z [INFO    ] guardrails.output_guard: output_pipeline | start | text_len=1192
 2026-05-24T16:41:15Z [INFO    ] guardrails.llamaguard: classify | safe | role=assistant latency_ms=1057
 2026-05-24T16:41:15Z [INFO    ] guardrails.output_guard: output_pipeline | PASSED
+2026-05-25T18:48:26Z [INFO    ] app.components.stream_handler: run_pending_response | start | model=claude-haiku thread=cd7534cd
+2026-05-25T18:48:26Z [INFO    ] guardrails.input_guard: input_pipeline | start | text_len=38
+2026-05-25T18:48:30Z [INFO    ] httpx: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-05-25T18:48:30Z [INFO    ] guardrails.llamaguard: classify | safe | role=user latency_ms=3650
+2026-05-25T18:48:32Z [INFO    ] guardrails.input_guard: input_pipeline | PASSED | pii_detected=True
+2026-05-25T18:48:32Z [INFO    ] app.components.stream_handler: run_pending_response | streaming agent | model=claude-haiku
+2026-05-25T18:48:42Z [INFO    ] app.components.stream_handler: run_pending_response | stream done | model=claude-haiku latency_ms=9429
+2026-05-25T18:48:42Z [INFO    ] guardrails.output_guard: output_pipeline | start | text_len=630
+2026-05-25T18:48:43Z [INFO    ] guardrails.llamaguard: classify | safe | role=assistant latency_ms=892
+2026-05-25T18:48:44Z [INFO    ] guardrails.output_guard: output_pipeline | PASSED

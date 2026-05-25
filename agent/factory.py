@@ -60,8 +60,7 @@ def run_agent(
         for chunk in graph.stream({"messages": messages}, config, stream_mode="updates"):
             for node_name, state in chunk.items():
                 for msg in state.get("messages", []):
-                    step = _parse_message_to_step(msg)
-                    if step:
+                    for step in _parse_message_to_step(msg):
                         steps.append(step)
                         if step["type"] == "response":
                             final_response = step["content"]
@@ -69,6 +68,7 @@ def run_agent(
         logger.error("run_agent | failed | model=%s", model_id, exc_info=True)
         raise
 
+    steps = fold_tool_results(steps)
     elapsed = (time.perf_counter() - t0) * 1000
     logger.info("run_agent | done | model=%s elapsed_ms=%.0f steps=%d", model_id, elapsed, len(steps))
     return final_response, steps
@@ -103,8 +103,7 @@ def stream_and_collect(
             if mode == "updates":
                 for _node, state in payload.items():
                     for msg in state.get("messages", []):
-                        step = _parse_message_to_step(msg)
-                        if step:
+                        for step in _parse_message_to_step(msg):
                             snapshot.append(step)
             elif mode == "messages":
                 chunk, metadata = payload
@@ -146,8 +145,7 @@ def stream_events(
         if mode == "updates":
             for _node, state in payload.items():
                 for msg in state.get("messages", []):
-                    step = _parse_message_to_step(msg)
-                    if step:
+                    for step in _parse_message_to_step(msg):
                         yield step
         elif mode == "messages":
             chunk, metadata = payload
@@ -173,14 +171,18 @@ def _extract_text(content: Any) -> str:
     return str(content)
 
 
-def _parse_message_to_step(msg: Any) -> dict | None:
+def _parse_message_to_step(msg: Any) -> list[dict]:
     """
-    Convert a LangGraph message object into a state_snapshot step dict.
+    Convert a LangGraph message object into one or more state_snapshot step dicts.
+
+    An AIMessage carrying N parallel tool calls produces N "tool_call" steps —
+    one per call — so the UI can render every branch of a parallel fan-out
+    instead of silently dropping all but the first (FR §15.2, FR-AGT-04).
 
     Step types:
-      - "tool_call": {type, tool, args, call_id, latency_ms}
+      - "tool_call":   {type, tool, args, call_id, latency_ms}
       - "tool_result": {type, content, call_id}
-      - "response": {type, content}
+      - "response":    {type, content}
     """
     from langchain_core.messages import AIMessage, ToolMessage
 
@@ -188,19 +190,48 @@ def _parse_message_to_step(msg: Any) -> dict | None:
 
     if isinstance(msg, AIMessage):
         if msg.tool_calls:
-            tc = msg.tool_calls[0]
-            logger.debug("parse_step | tool_call | name=%s call_id=%s", tc["name"], tc["id"])
-            return {
-                "type": "tool_call",
-                "tool": tc["name"],
-                "args": tc["args"],
-                "call_id": tc["id"],
-                "latency_ms": 0,
-            }
-        return {"type": "response", "content": _extract_text(msg.content)}
+            steps: list[dict] = []
+            for tc in msg.tool_calls:
+                logger.debug("parse_step | tool_call | name=%s call_id=%s", tc["name"], tc["id"])
+                steps.append({
+                    "type": "tool_call",
+                    "tool": tc["name"],
+                    "args": tc["args"],
+                    "call_id": tc["id"],
+                    "latency_ms": 0,
+                })
+            return steps
+        return [{"type": "response", "content": _extract_text(msg.content)}]
 
     if isinstance(msg, ToolMessage):
         logger.debug("parse_step | tool_result | call_id=%s", msg.tool_call_id)
-        return {"type": "tool_result", "content": _extract_text(msg.content), "call_id": msg.tool_call_id}
+        return [{"type": "tool_result", "content": _extract_text(msg.content), "call_id": msg.tool_call_id}]
 
-    return None
+    return []
+
+
+def fold_tool_results(steps: list[dict]) -> list[dict]:
+    """
+    Attach each "tool_result" step's content to its matching "tool_call" step
+    (paired by call_id) and drop the standalone "tool_result" entries.
+
+    The rendered snapshot then contains one row per tool invocation — args and
+    result on the same row — which keeps step numbering contiguous and avoids
+    the silent gaps the previous renderer left behind for unhandled types.
+
+    Unmatched tool_result entries (no preceding tool_call with the same id) are
+    preserved so nothing is silently lost in malformed streams.
+    """
+    by_call_id: dict[str, dict] = {
+        s["call_id"]: s for s in steps if s.get("type") == "tool_call" and s.get("call_id")
+    }
+
+    folded: list[dict] = []
+    for step in steps:
+        if step.get("type") == "tool_result":
+            parent = by_call_id.get(step.get("call_id"))
+            if parent is not None:
+                parent["result"] = step.get("content", "")
+                continue
+        folded.append(step)
+    return folded

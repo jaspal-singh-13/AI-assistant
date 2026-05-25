@@ -11,6 +11,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - `agent/system_prompt.py` — rewrote `SYSTEM_PROMPT` into a two-layer in-app tour guide: Layer 1 App map (pages 1–4 + processes A–M with one-line briefs) + Layer 2 step-by-step walkthroughs (3–6 numbered steps each for all 13 processes); added proactive-help rules so the agent volunteers the App map on "how do I" / "I'm lost" / "help" cues and sends only the walkthrough the user picks
 
+## [0.12.1] — 2026-05-25
+
+### Fixed
+- `agent/factory.py` `_parse_message_to_step()` — when an `AIMessage` carries N parallel tool calls (e.g. a single Qwen turn that issues `get_weather` for three cities at once), the parser now fans out N `tool_call` steps instead of silently keeping only `msg.tool_calls[0]` and dropping the rest; fixes the reasoning panel showing "1. TOOL CALL → city: Nagpur" followed immediately by "5. RESPONDING" for the "Get weather of Nagpur, Indore and Pune" query
+- `app/components/state_panel.py` `_render_steps()` — added a guard that excludes legacy standalone `tool_result` entries from both the step count and the numbered rendering loop, so old saved threads no longer show gaps in the step numbering (the renderer previously had no `elif step_type == "tool_result":` branch but `enumerate()` still incremented past those rows)
+
+### Added
+- `agent/factory.py` `fold_tool_results()` — new helper that pairs every `tool_result` with its matching `tool_call` via `call_id`, attaches the result content onto the parent `tool_call` step, and drops the standalone `tool_result` entries; called at snapshot finalisation in `run_agent()` and after streaming completes in `app/components/stream_handler.py::run_pending_response()` so the persisted `state_snapshot` shows one contiguous numbered row per tool invocation (args + result on the same row) and the existing `result = step.get("result", "")` branch in `state_panel.py` finally has data to render
+- `tests/test_agent.py` — added `test_parallel_tool_calls_fan_out`, `test_fold_tool_results_pairs_by_call_id`, and `test_fold_tool_results_preserves_unmatched` covering the new parser + folding behaviour; updated the two existing `_parse_message_to_step` tests for the new `list[dict]` return signature
+- `tests/test_agent.py` — split `test_build_llm_oss` into `test_build_llm_oss_local` (asserts the `LocalTransformersChatModel` fallback when `OSS_SERVE_URL` is unset) and `test_build_llm_oss_served` (asserts the served path uses `langchain_openai.ChatOpenAI` against the configured base URL); both branches are now properly env-isolated via `monkeypatch`
+
 ## [0.11.5] — 2026-05-25
 
 ### Changed

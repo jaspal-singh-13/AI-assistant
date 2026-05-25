@@ -60,10 +60,11 @@ class TestModelRegistry:
             result = build_llm(DEFAULT_MODEL_KEY)
         assert result is not None
 
-    def test_build_llm_oss(self):
-        """build_llm for OSS model returns a LocalTransformersChatModel (mocked)."""
+    def test_build_llm_oss_local(self, monkeypatch):
+        """OSS model with no OSS_SERVE_URL set falls back to LocalTransformersChatModel."""
         from agent.models import MODELS
         oss_key = next(k for k, c in MODELS.items() if c.model_type == "oss")
+        monkeypatch.delenv("OSS_SERVE_URL", raising=False)
         mock_local_model = MagicMock()
         mock_local_module = MagicMock()
         mock_local_module.LocalTransformersChatModel.return_value = mock_local_model
@@ -71,6 +72,21 @@ class TestModelRegistry:
             from agent.models import build_llm
             result = build_llm(oss_key)
         assert result is not None
+
+    def test_build_llm_oss_served(self, monkeypatch):
+        """OSS model with OSS_SERVE_URL set uses ChatOpenAI against that URL."""
+        from agent.models import MODELS
+        oss_key = next(k for k, c in MODELS.items() if c.model_type == "oss")
+        monkeypatch.setenv("OSS_SERVE_URL", "http://localhost:8000/v1")
+        mock_chat = MagicMock()
+        mock_openai_module = MagicMock(ChatOpenAI=MagicMock(return_value=mock_chat))
+        with patch.dict("sys.modules", {"langchain_openai": mock_openai_module}):
+            from agent.models import build_llm
+            result = build_llm(oss_key)
+        assert result is mock_chat
+        mock_openai_module.ChatOpenAI.assert_called_once()
+        kwargs = mock_openai_module.ChatOpenAI.call_args.kwargs
+        assert kwargs["base_url"] == "http://localhost:8000/v1"
 
 
 class TestAgentFactory:
@@ -109,11 +125,11 @@ class TestAgentFactory:
             content="",
             tool_calls=[{"name": "get_weather", "args": {"city": "London"}, "id": "tc-001", "type": "tool_call"}],
         )
-        step = _parse_message_to_step(msg)
-        assert step is not None
-        assert step["type"] == "tool_call"
-        assert step["call_id"] == "tc-001"
-        assert step["tool"] == "get_weather"
+        steps = _parse_message_to_step(msg)
+        assert len(steps) == 1
+        assert steps[0]["type"] == "tool_call"
+        assert steps[0]["call_id"] == "tc-001"
+        assert steps[0]["tool"] == "get_weather"
 
     def test_state_snapshot_direct_response_has_no_tools(self):
         """When no tools are called, state_snapshot has a single response step."""
@@ -121,10 +137,64 @@ class TestAgentFactory:
         from agent.factory import _parse_message_to_step
 
         msg = AIMessage(content="Here is your answer.", tool_calls=[])
-        step = _parse_message_to_step(msg)
-        assert step is not None
-        assert step["type"] == "response"
-        assert step["content"] == "Here is your answer."
+        steps = _parse_message_to_step(msg)
+        assert len(steps) == 1
+        assert steps[0]["type"] == "response"
+        assert steps[0]["content"] == "Here is your answer."
+
+    def test_parallel_tool_calls_fan_out(self):
+        """An AIMessage with N parallel tool_calls produces N tool_call steps,
+        not just the first (regression: previously msg.tool_calls[0] silently
+        dropped all but the first call)."""
+        from langchain_core.messages import AIMessage
+        from agent.factory import _parse_message_to_step
+
+        msg = AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "get_weather", "args": {"city": "Nagpur"}, "id": "tc-1", "type": "tool_call"},
+                {"name": "get_weather", "args": {"city": "Indore"}, "id": "tc-2", "type": "tool_call"},
+                {"name": "get_weather", "args": {"city": "Pune"}, "id": "tc-3", "type": "tool_call"},
+            ],
+        )
+        steps = _parse_message_to_step(msg)
+        assert len(steps) == 3
+        assert [s["args"]["city"] for s in steps] == ["Nagpur", "Indore", "Pune"]
+        assert [s["call_id"] for s in steps] == ["tc-1", "tc-2", "tc-3"]
+        assert all(s["type"] == "tool_call" for s in steps)
+
+    def test_fold_tool_results_pairs_by_call_id(self):
+        """fold_tool_results attaches each tool_result.content to its matching
+        tool_call (by call_id) and drops the standalone tool_result entries."""
+        from agent.factory import fold_tool_results
+
+        raw = [
+            {"type": "tool_call", "tool": "get_weather", "args": {"city": "Nagpur"}, "call_id": "tc-1", "latency_ms": 0},
+            {"type": "tool_call", "tool": "get_weather", "args": {"city": "Indore"}, "call_id": "tc-2", "latency_ms": 0},
+            {"type": "tool_call", "tool": "get_weather", "args": {"city": "Pune"},   "call_id": "tc-3", "latency_ms": 0},
+            {"type": "tool_result", "content": "Nagpur: 42C", "call_id": "tc-1"},
+            {"type": "tool_result", "content": "Indore: 38C", "call_id": "tc-2"},
+            {"type": "tool_result", "content": "Pune: 32C",   "call_id": "tc-3"},
+            {"type": "response", "content": "Here you go."},
+        ]
+        folded = fold_tool_results(raw)
+
+        assert [s["type"] for s in folded] == ["tool_call", "tool_call", "tool_call", "response"]
+        assert folded[0]["result"] == "Nagpur: 42C"
+        assert folded[1]["result"] == "Indore: 38C"
+        assert folded[2]["result"] == "Pune: 32C"
+
+    def test_fold_tool_results_preserves_unmatched(self):
+        """An unmatched tool_result (no preceding tool_call with same id) is
+        kept so malformed streams do not silently lose data."""
+        from agent.factory import fold_tool_results
+
+        raw = [
+            {"type": "tool_result", "content": "orphan", "call_id": "tc-missing"},
+            {"type": "response", "content": "done"},
+        ]
+        folded = fold_tool_results(raw)
+        assert folded == raw
 
 
 class TestSystemPrompt:
