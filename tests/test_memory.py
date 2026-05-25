@@ -79,6 +79,20 @@ class TestThreadCRUD:
             assert loaded["title"] == thread["title"]
             assert loaded["id"] == thread["id"]
 
+    def test_save_thread_syncs_title_to_index(self, tmp_path):
+        """save_thread must write the updated title into index.json (auto-rename regression)."""
+        with patch("memory.manager.THREADS_DIR", tmp_path / "threads"), \
+             patch("memory.manager.INDEX_PATH", tmp_path / "index.json"):
+            from memory.manager import create_thread, list_threads, save_thread
+            thread = create_thread()
+            assert thread["title"] == "New thread"
+
+            thread["title"] = "My renamed title"
+            save_thread(thread)
+
+            index_entry = next(t for t in list_threads() if t["id"] == thread["id"])
+            assert index_entry["title"] == "My renamed title"
+
     def test_list_threads_ordered_by_updated_at(self, tmp_path):
         """list_threads returns newest first."""
         import time

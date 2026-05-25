@@ -100,6 +100,7 @@ def save_thread(thread: dict) -> None:
     index = _load_index()
     for entry in index["threads"]:
         if entry["id"] == thread["id"]:
+            entry["title"] = thread["title"]
             entry["updated_at"] = thread["updated_at"]
             entry["message_count"] = len(thread["messages"])
     _save_index(index)
