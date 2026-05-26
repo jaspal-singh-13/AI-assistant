@@ -100,22 +100,57 @@ _HIGHER_IS_BETTER = {"jailbreak_resistance", "refusal_quality"}
 
 
 def _style_pivot(pivot: "pd.DataFrame"):
-    """Apply per-column polarity-aware gradient: green=good, red=bad."""
+    """Apply per-column polarity-aware gradient: green=good, red=bad.
+
+    Uses explicit matplotlib colormap objects and Styler.apply() to avoid
+    the pandas background_gradient quirk where RdYlGn_r string is silently
+    ignored in some pandas/Streamlit versions.
+    """
+    import matplotlib.cm as cm
+    import matplotlib.colors as mcolors
+
+    rdylgn = cm.get_cmap("RdYlGn")
+    rdylgn_r = rdylgn.reversed()
+    norm = mcolors.Normalize(vmin=0, vmax=1)
+
+    def _col_colors(series: "pd.Series", metric_name: str) -> list[str]:
+        cmap = rdylgn if metric_name in _HIGHER_IS_BETTER else rdylgn_r
+        return [
+            f"background-color: {mcolors.to_hex(cmap(norm(v)))}"
+            for v in series
+        ]
+
     styler = pivot.style
     for col in pivot.columns:
-        cmap = "RdYlGn" if col in _HIGHER_IS_BETTER else "RdYlGn_r"
-        styler = styler.background_gradient(subset=[col], cmap=cmap, vmin=0, vmax=1)
+        styler = styler.apply(_col_colors, metric_name=col, subset=[col])
     return styler
 
 _MODEL_COLORS = ["#4C72B0", "#DD8452", "#55A868", "#C44E52"]
 
 
 def _chart_all_metrics(df: pd.DataFrame) -> alt.Chart:
-    """Interactive horizontal grouped bar chart — all metrics, both models."""
+    """Interactive horizontal grouped bar chart — all metrics, both models.
+
+    All bars are normalised so longer = better:
+      - higher-is-better metrics (jailbreak_resistance, refusal_quality): raw score used as-is
+      - lower-is-better metrics (hallucination, bias, toxicity): displayed as 1 - raw_score
+    The tooltip shows the original raw score so the user can verify against model_scores.json.
+    """
     df = df[df["low_confidence"].astype(str).str.lower() != "true"].copy()
     avg = df.groupby(["model_id", "metric"])["score"].mean().reset_index()
     avg["score"] = avg["score"].round(3)
+
+    # Normalise to a performance scale where 1 = best for every metric
+    avg["perf_score"] = avg.apply(
+        lambda r: r["score"] if r["metric"] in _HIGHER_IS_BETTER else round(1 - r["score"], 3),
+        axis=1,
+    )
+
     avg["metric_label"] = avg["metric"].map(lambda m: _METRIC_LABELS.get(m, m))
+    avg["raw_label"] = avg.apply(
+        lambda r: f"Raw: {r['score']:.3f}" + ("" if r["metric"] in _HIGHER_IS_BETTER else " (inverted)"),
+        axis=1,
+    )
 
     models = sorted(avg["model_id"].unique().tolist())
     color_scale = alt.Scale(domain=models, range=_MODEL_COLORS[: len(models)])
@@ -123,7 +158,7 @@ def _chart_all_metrics(df: pd.DataFrame) -> alt.Chart:
     base = alt.Chart(avg).encode(
         y=alt.Y(
             "metric_label:N",
-            sort=alt.EncodingSortField("score", op="mean", order="descending"),
+            sort=alt.EncodingSortField("perf_score", op="mean", order="descending"),
             title=None,
             axis=alt.Axis(labelFontSize=13),
         ),
@@ -131,24 +166,25 @@ def _chart_all_metrics(df: pd.DataFrame) -> alt.Chart:
         tooltip=[
             alt.Tooltip("model_id:N", title="Model"),
             alt.Tooltip("metric_label:N", title="Metric"),
-            alt.Tooltip("score:Q", title="Avg Score", format=".3f"),
+            alt.Tooltip("perf_score:Q", title="Performance (↑ better)", format=".3f"),
+            alt.Tooltip("raw_label:N", title="Original score"),
         ],
     )
 
     bars = base.mark_bar().encode(
         x=alt.X(
-            "score:Q",
+            "perf_score:Q",
             scale=alt.Scale(domain=[0, 1]),
-            title="Average Score",
+            title="Performance Score (higher = better for all metrics)",
             axis=alt.Axis(grid=True, format=".1f"),
         ),
         yOffset="model_id:N",
     )
 
     labels = base.mark_text(align="left", dx=4, fontSize=11).encode(
-        x=alt.X("score:Q", scale=alt.Scale(domain=[0, 1])),
+        x=alt.X("perf_score:Q", scale=alt.Scale(domain=[0, 1])),
         yOffset="model_id:N",
-        text=alt.Text("score:Q", format=".2f"),
+        text=alt.Text("perf_score:Q", format=".2f"),
     )
 
     rule = alt.Chart(pd.DataFrame({"x": [0.5]})).mark_rule(
