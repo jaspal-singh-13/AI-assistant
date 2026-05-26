@@ -105,6 +105,22 @@ def main() -> None:
 
     framework = EvalFramework()
 
+    # Download public benchmarks when skip_benchmarks is OFF and cache is missing.
+    # load_prompts() only reads from cache — it never triggers a download on its own.
+    if not args.skip_benchmarks:
+        from evaluation.benchmarks.loader import BENCHMARKS, load_benchmark
+        for name, cfg in BENCHMARKS.items():
+            if not cfg["file"].exists():
+                logger.info("benchmark | downloading | name=%s", name)
+                try:
+                    load_benchmark(name, seed=args.seed)
+                    logger.info("benchmark | cached | name=%s", name)
+                except Exception as exc:
+                    logger.warning(
+                        "benchmark | download failed | name=%s error=%s: %s — skipping",
+                        name, type(exc).__name__, exc,
+                    )
+
     logger.info("load_prompts | start")
     all_prompts = framework.load_prompts()
 

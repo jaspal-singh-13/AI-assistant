@@ -9,6 +9,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- `evaluation/run_eval.py` — when `--skip-benchmarks` is OFF, the pipeline now downloads missing benchmark cache files (TruthfulQA, BBQ, AdvGLUE) via `load_benchmark()` before calling `load_prompts()`; previously `load_prompts()` silently skipped all benchmarks because it only reads from cache and never triggers a download, so toggling off "Skip benchmarks" in the UI had no effect
 - `app/pages/01_chat.py` — `render_model_selector` crashed with `IndexError` when `list_models()` returned an empty list (no `MODELS_*` env vars on Streamlit Cloud); added empty-list guard that shows a warning and calls `st.stop()` before attempting `render_sidebar`/`render_chat`
 - `memory/manager.py` — `save_thread()` did not write the updated `title` field back to `index.json`; auto-rename on first user message was silently discarded from the sidebar display
 - `evaluation/deepeval_metrics.py` — single failing metric (e.g. GEval) inside `score_response` aborted the entire dict comprehension, silently dropping all other metrics for that prompt; each metric now runs independently so a failure in jailbreak/refusal no longer loses toxicity and vice versa; actual error type and message are now logged as a WARNING
