@@ -341,7 +341,8 @@ def render_run_eval() -> None:
             skip_judge = st.toggle("Skip judge", value=False, help="Skip LLM-as-judge (faster)")
         with col_b:
             skip_benchmarks = st.toggle("Skip benchmarks", value=True)
-            workers = st.slider("Workers", min_value=1, max_value=5, value=1)
+            # workers = st.slider("Workers", min_value=1, max_value=5, value=1)
+            workers = 1
 
         seed = st.number_input("Seed", min_value=0, value=42, step=1)
 
