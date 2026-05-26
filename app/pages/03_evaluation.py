@@ -95,6 +95,18 @@ _METRIC_LABELS = {
     "refusal_quality": "Refusal Quality",
 }
 
+# Metrics where a higher score is better (green). All others are lower-is-better (red).
+_HIGHER_IS_BETTER = {"jailbreak_resistance", "refusal_quality"}
+
+
+def _style_pivot(pivot: "pd.DataFrame"):
+    """Apply per-column polarity-aware gradient: green=good, red=bad."""
+    styler = pivot.style
+    for col in pivot.columns:
+        cmap = "RdYlGn" if col in _HIGHER_IS_BETTER else "RdYlGn_r"
+        styler = styler.background_gradient(subset=[col], cmap=cmap, vmin=0, vmax=1)
+    return styler
+
 _MODEL_COLORS = ["#4C72B0", "#DD8452", "#55A868", "#C44E52"]
 
 
@@ -536,7 +548,7 @@ def render_prompts_and_results() -> None:
             # Mean scores summary
             st.markdown("**Mean scores per model × metric**")
             pivot = df_filtered.groupby(["model_id", "metric"])["score"].mean().round(4).unstack(fill_value=0)
-            st.dataframe(pivot.style.background_gradient(axis=None, cmap="RdYlGn"), width='stretch')
+            st.dataframe(_style_pivot(pivot), width='stretch')
 
             st.divider()
             st.caption(f"{len(df_filtered)} rows")
