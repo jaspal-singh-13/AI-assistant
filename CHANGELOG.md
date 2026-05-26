@@ -9,6 +9,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- `evaluation/benchmarks/loader.py` — fixed all three benchmark `load_dataset` calls that were failing at runtime: `truthful_qa` renamed to `truthfulqa/truthful_qa` (missing namespace caused `HfUriError`); `adv_glue` renamed to `AI-Secure/adv_glue` (same namespace error, redirect visible in logs); `heegyu/bbq` now loads via `revision="refs/convert/parquet"` because `datasets>=4.0` removed dataset script execution entirely and `bbq.py` is a legacy script
 - `evaluation/run_eval.py` — when `--skip-benchmarks` is OFF, the pipeline now downloads missing benchmark cache files (TruthfulQA, BBQ, AdvGLUE) via `load_benchmark()` before calling `load_prompts()`; previously `load_prompts()` silently skipped all benchmarks because it only reads from cache and never triggers a download, so toggling off "Skip benchmarks" in the UI had no effect
 - `app/pages/01_chat.py` — `render_model_selector` crashed with `IndexError` when `list_models()` returned an empty list (no `MODELS_*` env vars on Streamlit Cloud); added empty-list guard that shows a warning and calls `st.stop()` before attempting `render_sidebar`/`render_chat`
 - `memory/manager.py` — `save_thread()` did not write the updated `title` field back to `index.json`; auto-rename on first user message was silently discarded from the sidebar display

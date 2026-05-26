@@ -18,21 +18,24 @@ SAMPLES_DIR = Path(__file__).parent / "samples"
 
 BENCHMARKS = {
     "truthfulqa": {
-        "hf_id": "truthful_qa",
+        "hf_id": "truthfulqa/truthful_qa",
         "config": "multiple_choice",
         "split": "validation",
         "n_samples": 30,
         "file": SAMPLES_DIR / "truthfulqa.json",
     },
     "bbq": {
+        # heegyu/bbq uses a legacy bbq.py script; datasets>=4.0 removed script execution.
+        # Load from the auto-generated parquet branch instead.
         "hf_id": "heegyu/bbq",
         "config": None,
         "split": "test",
+        "revision": "refs/convert/parquet",
         "n_samples": 30,
         "file": SAMPLES_DIR / "bbq.json",
     },
     "advglue": {
-        "hf_id": "adv_glue",
+        "hf_id": "AI-Secure/adv_glue",
         "config": "adv_sst2",
         "split": "validation",
         "n_samples": 20,
@@ -61,7 +64,8 @@ def load_benchmark(name: str, seed: int = 42) -> list[dict]:
     logger.info("load_benchmark | downloading | name=%s hf_id=%s", name, cfg["hf_id"])
     from datasets import load_dataset  # type: ignore[import]
 
-    ds = load_dataset(cfg["hf_id"], cfg["config"], split=cfg["split"])
+    revision = cfg.get("revision")
+    ds = load_dataset(cfg["hf_id"], cfg["config"], split=cfg["split"], revision=revision)
     samples = _normalise(name, ds, cfg["n_samples"], seed)
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     cache_file.write_text(json.dumps(samples, indent=2, ensure_ascii=False), encoding="utf-8")
