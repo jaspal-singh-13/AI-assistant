@@ -103,11 +103,31 @@ blocked = sum(1 for r in all_records if r.get("guardrail_blocked"))
 block_rate = blocked / total_calls if total_calls else 0.0
 
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Threads", f"{total_threads:,}")
-c2.metric("Total calls", f"{total_calls:,}")
-c3.metric("Total cost", _fmt_cost(total_cost))
-c4.metric("Avg latency", f"{avg_latency:,.0f} ms" if total_calls else "—")
-c5.metric("Block rate", f"{block_rate:.1%}" if total_calls else "—")
+c1.metric(
+    "Threads",
+    f"{total_threads:,}",
+    help="Number of conversation threads saved on disk.",
+)
+c2.metric(
+    "Total calls",
+    f"{total_calls:,}",
+    help="Total LLM API calls logged across all models and threads since logging began.",
+)
+c3.metric(
+    "Total cost",
+    _fmt_cost(total_cost),
+    help="Combined estimated spend on LLM tokens and guardrail checks.",
+)
+c4.metric(
+    "Avg latency",
+    f"{avg_latency:,.0f} ms" if total_calls else "—",
+    help="Mean end-to-end response time in milliseconds across all logged calls.",
+)
+c5.metric(
+    "Block rate",
+    f"{block_rate:.1%}" if total_calls else "—",
+    help="Percentage of calls blocked by safety guardrails (input or output stage).",
+)
 
 st.divider()
 
@@ -127,9 +147,13 @@ if configured_models:
         )
         with col:
             st.markdown(f"**{cfg.model_label}** &nbsp; {badge}")
-            st.metric("Calls", f"{len(model_records):,}")
-            st.metric("Total cost", _fmt_cost(m_cost))
-            st.metric("Avg latency", f"{m_lat:,.0f} ms" if model_records else "—")
+            st.metric("Calls", f"{len(model_records):,}", help="Total LLM calls made using this model.")
+            st.metric("Total cost", _fmt_cost(m_cost), help="Cumulative estimated token cost for this model.")
+            st.metric(
+                "Avg latency",
+                f"{m_lat:,.0f} ms" if model_records else "—",
+                help="Mean end-to-end response time for this model in milliseconds.",
+            )
 else:
     st.info("No models configured. Check your `.env` for `MODELS_*` entries.", icon="⚙️")
 

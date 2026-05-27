@@ -45,6 +45,7 @@ def _render_new_chat_button() -> None:
 def _render_thread_list() -> None:
     """Render thread list; each row has the title button + rename + delete icons."""
     st.markdown("### Threads")
+    st.caption("Each thread is an independent conversation saved to disk. Click to open, ✏️ to rename, 🗑️ to delete.")
 
     threads = st.session_state.get("threads", [])
     active_id = (st.session_state.get("active_thread") or {}).get("id")
@@ -112,7 +113,18 @@ def _render_context_slider() -> None:
         return
 
     current_window = thread.get("context_window_size", 10)
-    new_window = st.slider("Context window", min_value=5, max_value=50, value=current_window, step=1)
+    new_window = st.slider(
+        "Context window",
+        min_value=5,
+        max_value=50,
+        value=current_window,
+        step=1,
+        help=(
+            "How many of the most recent messages are sent to the model on each reply. "
+            "Larger values give the model more conversation history to work with, "
+            "but consume more tokens and increase cost per call."
+        ),
+    )
     if new_window != current_window:
         thread["context_window_size"] = new_window
         # Clamp summary_trigger so it stays at least context_window + 5

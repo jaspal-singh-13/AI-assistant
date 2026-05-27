@@ -222,6 +222,10 @@ def render_dashboard() -> None:
     _NEGATIVE_DIMS = {"hallucination", "bias_harmful"}
 
     st.subheader("Model Scorecard")
+    st.caption(
+        "Each dimension is scored by running the evaluation prompts through DeepEval metrics. "
+        "Hover the **?** icon on any model score for raw metric details."
+    )
     dimensions = ["hallucination", "bias_harmful", "content_safety"]
     dim_cols = st.columns(len(dimensions))
 
@@ -333,6 +337,13 @@ def render_run_eval() -> None:
             "Prompt category",
             options=["all", "factual", "adversarial", "bias_sensitive"],
             format_func=lambda x: "All categories" if x == "all" else _CATEGORY_LABELS.get(x, x),
+            help=(
+                "Filter which evaluation prompts are run:\n\n"
+                "• **Factual** — questions with a known correct answer; tests hallucination.\n\n"
+                "• **Adversarial** — jailbreak attempts, prompt injections; tests safety & refusal quality.\n\n"
+                "• **Bias & Sensitive** — prompts touching race, gender, religion; tests for biased or toxic output.\n\n"
+                "• **All categories** — runs every prompt across all three categories."
+            ),
         )
 
         col_a, col_b = st.columns(2)
@@ -340,11 +351,29 @@ def render_run_eval() -> None:
             light_mode = st.toggle("Light mode", value=True, help="3 prompts per category (9 total)")
             skip_judge = st.toggle("Skip judge", value=False, help="Skip LLM-as-judge (faster)")
         with col_b:
-            skip_benchmarks = st.toggle("Skip benchmarks", value=True)
+            skip_benchmarks = st.toggle(
+                "Skip benchmarks",
+                value=True,
+                help=(
+                    "When enabled (default), skips running external benchmark datasets "
+                    "(e.g. TruthfulQA, MMLU). "
+                    "Disable only when you want a full benchmark sweep — it adds significant runtime."
+                ),
+            )
             # workers = st.slider("Workers", min_value=1, max_value=5, value=1)
             workers = 1
 
-        seed = st.number_input("Seed", min_value=0, value=42, step=1)
+        seed = st.number_input(
+            "Seed",
+            min_value=0,
+            value=42,
+            step=1,
+            help=(
+                "Random seed passed to the evaluation pipeline. "
+                "Using the same seed across runs ensures identical prompt-sampling order, "
+                "making results reproducible and directly comparable."
+            ),
+        )
 
     # ── Prompt filter ─────────────────────────────────────────────────────────
     with right:
@@ -525,8 +554,23 @@ def render_prompts_and_results() -> None:
                 new_id = st.text_input("Prompt ID", placeholder="e.g. factual_custom_001")
                 new_category = st.selectbox("Category", ["factual", "adversarial", "bias_sensitive"])
             with col2:
-                new_expected = st.text_input("Expected Output (optional)")
-                new_context = st.text_area("Context (optional)", height=80)
+                new_expected = st.text_input(
+                    "Expected Output (optional)",
+                    help=(
+                        "The ideal reference answer for this prompt. "
+                        "Used by the LLM judge to score factual accuracy. "
+                        "Leave blank for adversarial or open-ended prompts."
+                    ),
+                )
+                new_context = st.text_area(
+                    "Context (optional)",
+                    height=80,
+                    help=(
+                        "Background text the model should use to answer the prompt "
+                        "(e.g. a document excerpt for RAG-style questions). "
+                        "Leave blank for prompts that don't need grounding context."
+                    ),
+                )
 
             new_prompt = st.text_area("Prompt text *", height=100, placeholder="Enter the prompt…")
             submitted = st.form_submit_button("Add Prompt", type="primary")
@@ -562,6 +606,11 @@ def render_prompts_and_results() -> None:
         if not _SUMMARY_FILE.exists():
             st.info("No summary.csv found. Run an evaluation first.")
         else:
+            st.caption(
+                "Per-prompt, per-metric raw scores from the last evaluation run. "
+                "The pivot table shows mean scores: green = good, red = bad "
+                "(polarity is aware — lower hallucination is green, higher jailbreak resistance is green)."
+            )
             df_sum = pd.read_csv(_SUMMARY_FILE)
 
             filter_col1, filter_col2 = st.columns(2)
@@ -597,6 +646,11 @@ def render_prompts_and_results() -> None:
         if not _COMPARATIVE_FILE.exists():
             st.info("No comparative.csv found. Run an evaluation with the judge enabled.")
         else:
+            st.caption(
+                "Head-to-head comparison produced by the LLM judge. "
+                "For each prompt the judge reads both models' responses and declares a **winner** "
+                "(model A, model B, or **tie**). Requires **Skip judge** to be off during the eval run."
+            )
             df_comp = pd.read_csv(_COMPARATIVE_FILE)
 
             winner_filter = st.multiselect(

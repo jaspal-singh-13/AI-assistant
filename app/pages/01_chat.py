@@ -42,7 +42,7 @@ from app.components.thread_sidebar import render_sidebar
 from app.components.chat_window import render_chat
 
 
-@st.cache_resource(show_spinner="Warming up agents…")
+@st.cache_resource(show_spinner="Warming up the agent…")
 def _warmup_graphs() -> dict:
     """Build one compiled graph per model at startup and cache across reruns."""
     tools = get_tools()
@@ -89,6 +89,14 @@ def render_model_selector() -> None:
         list(options.keys()),
         index=list(options.keys()).index(current_label),
         label_visibility="collapsed",
+        help=(
+            "Choose the AI model for this conversation.\n\n"
+            "🔵 **Frontier** — cloud-hosted commercial APIs (e.g. Claude). "
+            "Generally more capable; usage is billed per token.\n\n"
+            "🟠 **OSS** — open-source models (e.g. Qwen / Llama). "
+            "Run locally, no per-token cost.\n\n"
+            "You can switch models mid-thread; a divider will mark where the switch happened."
+        ),
     )
     chosen_key = options[chosen_label]
     if chosen_key != st.session_state.get("model_key"):

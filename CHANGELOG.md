@@ -8,6 +8,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Added contextual `help` tooltips to all major UI controls and metric cards across `app/dashboard.py`, `app/pages/01_chat.py`, `app/pages/02_observability.py`, `app/pages/03_evaluation.py`, `app/components/thread_sidebar.py`: model selector, context window slider, summary trigger, safety guardrails toggle, auto-refresh toggle, all five global summary metrics, all per-model breakdown metrics, evaluation category selector, skip-benchmarks toggle, seed input, expected-output and context fields in the add-prompt form, and scorecard dimension captions; also added inline `st.caption` explanations to the Threads list header, Summary CSV tab, and Comparative CSV tab for discoverability
+
 ### Fixed
 - `app/pages/03_evaluation.py` — "All Metrics — Model Comparison" bar chart now normalises all scores to a performance scale (longer bar = better for every metric): lower-is-better metrics (`hallucination`, `bias`, `toxicity`) are displayed as `1 − raw_score` so a Claude hallucination score of 0.0 renders as a full bar (1.0 = perfect) instead of no bar; the tooltip still shows the original raw score for traceability; sort order now reflects actual model goodness rather than raw score magnitude
 - `app/pages/03_evaluation.py` — "Mean scores per model × metric" pivot table polarity-aware colouring now uses explicit `matplotlib.cm` colormap objects via `Styler.apply()` instead of the `"RdYlGn_r"` string passed to `background_gradient`; the string form was silently ignored in the installed pandas/Streamlit version, causing all columns to render with `RdYlGn` (0=red) regardless of metric polarity — `bias`, `hallucination`, and `toxicity` now correctly show 0 as bright green and 1 as bright red

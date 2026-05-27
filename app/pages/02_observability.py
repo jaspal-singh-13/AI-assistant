@@ -53,7 +53,11 @@ with st.sidebar:
         help="Limits how many calls appear in the charts. Does not affect metric totals.",
     )
 
-    auto_refresh = st.toggle("Auto-refresh (30 s)", value=False)
+    auto_refresh = st.toggle(
+        "Auto-refresh (30 s)",
+        value=False,
+        help="Automatically reloads this page every 30 seconds so charts reflect new activity without a manual refresh.",
+    )
 
     st.divider()
     st.caption("Logs written to `logs/calls.jsonl`")
@@ -146,11 +150,31 @@ blocked = df["guardrail_blocked"].sum() if "guardrail_blocked" in df.columns els
 block_rate = blocked / total_calls if total_calls else 0
 
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Total calls", f"{total_calls:,}")
-c2.metric("Avg latency", f"{avg_latency:,.0f} ms")
-c3.metric("LLM cost", _fmt_cost(llm_cost))
-c4.metric("Guardrail cost", _fmt_cost(guardrail_cost))
-c5.metric("Block rate", f"{block_rate:.1%}" if total_calls else "—")
+c1.metric(
+    "Total calls",
+    f"{total_calls:,}",
+    help="Total number of completed LLM calls within the selected models and call-count window.",
+)
+c2.metric(
+    "Avg latency",
+    f"{avg_latency:,.0f} ms",
+    help="Mean end-to-end response time — from when a message is submitted to the last token received.",
+)
+c3.metric(
+    "LLM cost",
+    _fmt_cost(llm_cost),
+    help="Estimated total spend on LLM tokens (input + output) based on live provider pricing.",
+)
+c4.metric(
+    "Guardrail cost",
+    _fmt_cost(guardrail_cost),
+    help="Estimated cost of running LlamaGuard safety checks on inputs and outputs. Separate from LLM cost.",
+)
+c5.metric(
+    "Block rate",
+    f"{block_rate:.1%}" if total_calls else "—",
+    help="Percentage of calls where the safety guardrail blocked either the user's input or the model's output.",
+)
 
 st.divider()
 
@@ -165,22 +189,39 @@ for col, model in zip(model_cols, models_in_df):
         mtype = mdf["model_type"].iloc[0] if "model_type" in mdf.columns else "—"
         badge = "🔵 Frontier" if mtype == "frontier" else "🟠 OSS"
         st.markdown(f"**{_short(model)}**  \n{badge}")
-        st.metric("Calls", f"{len(mdf):,}")
-        st.metric("Avg latency", f"{mdf['latency_ms'].mean():,.0f} ms")
+        st.metric("Calls", f"{len(mdf):,}", help="Total LLM calls logged for this model in the selected window.")
+        st.metric(
+            "Avg latency",
+            f"{mdf['latency_ms'].mean():,.0f} ms",
+            help="Mean end-to-end response time for this model.",
+        )
         m_llm_cost = mdf["llm_cost_usd"].sum() if "llm_cost_usd" in mdf.columns else mdf["total_cost_usd"].sum()
-        st.metric("LLM cost", _fmt_cost(m_llm_cost))
+        st.metric("LLM cost", _fmt_cost(m_llm_cost), help="Cumulative estimated token cost for this model.")
         m_guard_cost = mdf["guardrail_cost_usd"].sum() if "guardrail_cost_usd" in mdf.columns else 0.0
-        st.metric("Guardrail cost", _fmt_cost(m_guard_cost))
+        st.metric(
+            "Guardrail cost",
+            _fmt_cost(m_guard_cost),
+            help="Cumulative cost of safety-guardrail checks run on this model's calls.",
+        )
         avg_1k = mdf["cost_per_1k_tokens"].mean()
         st.metric(
             "Cost / 1k tokens",
             _fmt_cost(avg_1k / 1000) if avg_1k > 0 else "—",
+            help="Average token cost per 1 000 tokens (input + output combined) at current pricing.",
         )
         blk = mdf["guardrail_blocked"].sum() if "guardrail_blocked" in mdf.columns else 0
-        st.metric("Blocked calls", f"{int(blk):,}")
+        st.metric(
+            "Blocked calls",
+            f"{int(blk):,}",
+            help="Number of calls where the safety guardrail blocked the input or output.",
+        )
         if "tool_calls" in mdf.columns:
             all_tools = [t for row in mdf["tool_calls"] for t in (row or [])]
-            st.metric("Tool invocations", f"{len(all_tools):,}")
+            st.metric(
+                "Tool invocations",
+                f"{len(all_tools):,}",
+                help="Total number of external tool calls (e.g. weather, search) made by the agent.",
+            )
 
 st.divider()
 
